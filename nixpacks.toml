@@ -1,7 +1,0 @@
-providers = ["python"]
-
-[phases.install]
-cmds = ["pip3 install -r requirements.txt"]
-
-[start]
-cmd = "python -c \"import backend.preprocess as p; p.run()\" && uvicorn main:app --host 0.0.0.0 --port $PORT"
