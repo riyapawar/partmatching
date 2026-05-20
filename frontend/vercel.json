@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://YOUR-RAILWAY-URL.railway.app/api/:path*" },
+    { "source": "/api/:path*", "destination": "https://partmatching-production.up.railway.app/api/:path*" },
     { "source": "/(.*)",       "destination": "/index.html" }
   ]
 }
