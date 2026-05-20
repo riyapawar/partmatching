@@ -1,30 +1,107 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #0f1117;
-  --surface:   #1a1d27;
-  --border:    #2a2d3a;
-  --text:      #e8eaf0;
-  --muted:     #7a7f9a;
-  --accent:    #4f8ef7;
-  --green:     #22c55e;
-  --yellow:    #eab308;
+  --bg:        #060b18;
+  --surface:   rgba(11, 17, 35, 0.82);
+  --glass:     rgba(255, 255, 255, 0.03);
+  --border:    rgba(255, 255, 255, 0.08);
+  --border-hi: rgba(16, 185, 129, 0.25);
+  --text:      #dde3f4;
+  --muted:     #556070;
+  --accent:    #10b981;
+  --cyan:      #06b6d4;
+  --green:     #10b981;
+  --yellow:    #f59e0b;
   --red:       #ef4444;
-  --radius:    10px;
+  --radius:    12px;
+  --display:   'Space Grotesk', system-ui, sans-serif;
+  --body:      'Inter', system-ui, sans-serif;
+  --mono:      'JetBrains Mono', 'Fira Code', monospace;
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--body);
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  /* Dual radial glow: emerald top-left, cyan bottom-right */
+  background-image:
+    radial-gradient(ellipse 80% 55% at 0%   0%,   rgba(16, 185, 129, 0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 45% at 100% 100%, rgba(6,  182, 212, 0.07) 0%, transparent 60%);
+  /* Subtle dot-grid overlay */
+  background-size: 100% 100%, 100% 100%, 28px 28px;
 }
 
-input, select, textarea {
-  font-family: inherit;
+/* Dot grid via ::before on root */
+#root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  z-index: 0;
+}
+#root {
+  position: relative;
+  z-index: 1;
 }
 
-button {
-  cursor: pointer;
-  font-family: inherit;
+input, select, textarea { font-family: inherit; }
+button { cursor: pointer; font-family: inherit; }
+
+/* ── Glass card ─────────────────────────────────────────────────────────────── */
+.glass-card {
+  background: var(--surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
+
+/* ── Result card hover lift ─────────────────────────────────────────────────── */
+.result-card {
+  background: var(--surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  will-change: transform;
+}
+.result-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(16,185,129,0.18);
+  border-color: rgba(16,185,129,0.22);
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────────── */
+@keyframes pulse    { 0%,100% { opacity: .65 } 50% { opacity: .25 } }
+@keyframes slideDown { from { opacity:0; transform:translateY(-8px) } to { opacity:1; transform:translateY(0) } }
+@keyframes fadeIn   { from { opacity:0 } to { opacity:1 } }
+@keyframes shimmer  {
+  0%   { background-position: -400px 0 }
+  100% { background-position:  400px 0 }
+}
+
+.slide-down { animation: slideDown 0.2s ease forwards; }
+.fade-in    { animation: fadeIn   0.25s ease forwards; }
+
+/* ── Skeleton loader ─────────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, rgba(255,255,255,0.04) 50%, var(--surface) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear, pulse 1.4s ease-in-out infinite;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+/* ── Neon glow utilities ─────────────────────────────────────────────────────── */
+.glow-green { box-shadow: 0 0 12px rgba(16,185,129,0.35); }
+.glow-cyan  { box-shadow: 0 0 12px rgba(6,182,212,0.35); }
+.glow-amber { box-shadow: 0 0 12px rgba(245,158,11,0.35); }
+.glow-red   { box-shadow: 0 0 12px rgba(239,68,68,0.35); }

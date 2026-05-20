@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "python -c \"import backend.preprocess as p; p.run()\" && uvicorn main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/api/customers"
+healthcheckTimeout = 120
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

@@ -71,11 +71,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_frontend_dist = Path(__file__).parent / "frontend" / "dist"
-if _frontend_dist.exists():
-    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
-
-
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
 
 class SearchRequest(BaseModel):
@@ -139,7 +134,16 @@ def search(req: SearchRequest):
     profile = _customer_profiles.get(req.customer_id) if req.customer_id else None
 
     # ── Referential query shortcut ────────────────────────────────────────────
-    if is_referential(req.query) and profile:
+    if is_referential(req.query):
+        if not profile:
+            # Referential query with no customer selected — tell the frontend
+            return SearchResponse(
+                results        = [],
+                query_debug    = {"note": "select a customer to resolve order history"},
+                referential    = True,
+                conflicts      = [],
+                search_time_ms = _ms(t0),
+            )
         prior_orders = personalization.resolve_referential(req.query, profile)
         if prior_orders:
             results = _orders_to_results(prior_orders)
@@ -156,6 +160,16 @@ def search(req: SearchRequest):
 
     # ── Conflict detection (before retrieval — shown regardless of results) ───
     conflicts = detect_conflicts(query_parsed, profile)
+
+    # Bail early if no fastener attributes were recognized at all.
+    # Avoids embedding cost and prevents nonsensical queries from returning results.
+    if query_parsed.specificity == 0.0:
+        return SearchResponse(
+            results        = [],
+            query_debug    = _debug(query_parsed),
+            conflicts      = conflicts,
+            search_time_ms = _ms(t0),
+        )
 
     # ── Embed query ───────────────────────────────────────────────────────────
     query_vec = retrieval.embed_query(req.query, _openai_client)
@@ -201,6 +215,16 @@ def search(req: SearchRequest):
     else:
         results = [reranker._format(s) for s in scored[:3]]
         _inject_fills(results, scored)
+
+    # Deduplicate by SKU (catalog may contain near-duplicate entries)
+    seen_skus: set[str] = set()
+    deduped: list[dict] = []
+    for r in results:
+        sku = r.get("sku", "")
+        if sku not in seen_skus:
+            seen_skus.add(sku)
+            deduped.append(r)
+    results = deduped[:3]
 
     ms = _ms(t0)
 
@@ -316,3 +340,9 @@ def _log_review(query: str, customer_id: Optional[str],
     queue.append(entry)
     with open(REVIEW_QUEUE, "w", encoding="utf-8") as f:
         json.dump(queue, f, indent=2, ensure_ascii=False)
+
+
+# ── Static frontend (must be mounted AFTER API routes so /api/* isn't caught) ─
+_frontend_dist = Path(__file__).parent / "frontend" / "dist"
+if _frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")

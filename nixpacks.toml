@@ -1,0 +1,13 @@
+providers = ["python", "node"]
+
+[phases.install]
+cmds = [
+  "pip install -r requirements.txt",
+  "(cd frontend && npm ci)"
+]
+
+[phases.build]
+cmds = ["(cd frontend && npm run build)"]
+
+[start]
+cmd = "python -c \"import backend.preprocess as p; p.run()\" && uvicorn main:app --host 0.0.0.0 --port $PORT"
