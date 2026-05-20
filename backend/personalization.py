@@ -233,3 +233,56 @@ def _extract_product_hint(query: str) -> Optional[str]:
         if re.search(r'\b' + keyword + r'\b', q):
             return hint
     return None
+
+
+# ── Conflict detection ────────────────────────────────────────────────────────
+
+_CONFLICT_THRESHOLD = 0.55   # affinity must exceed this to fire a conflict warning
+
+def detect_conflicts(
+    query: ParsedAttributes,
+    profile: Optional[CustomerProfile],
+) -> list[str]:
+    """
+    Detect when a query attribute explicitly contradicts a strong customer preference.
+    Returns human-readable warning strings shown in the UI.
+
+    Example: customer orders stainless 80% of the time, but query says 'steel' →
+    "This customer usually orders stainless (80% of orders). Verify steel intent."
+    """
+    if profile is None or profile.sparse:
+        return []
+
+    warnings: list[str] = []
+
+    # ── Material conflict ─────────────────────────────────────────────────────
+    if query.material and profile.material_affinity:
+        top_mat, top_aff = next(iter(profile.material_affinity.items()))
+        if top_mat != query.material and top_aff >= _CONFLICT_THRESHOLD:
+            warnings.append(
+                f"This customer usually orders {top_mat} ({top_aff:.0%} of orders). "
+                f"Verify '{query.material}' intent."
+            )
+
+    # ── Finish conflict ───────────────────────────────────────────────────────
+    if query.finish and profile.finish_affinity:
+        top_fin, top_aff = next(iter(profile.finish_affinity.items()))
+        if top_fin != query.finish and top_aff >= _CONFLICT_THRESHOLD:
+            warnings.append(
+                f"This customer usually orders {top_fin.replace('_', ' ')} finish "
+                f"({top_aff:.0%} of orders). "
+                f"Verify '{query.finish.replace('_', ' ')}' intent."
+            )
+
+    # ── Metric/imperial system conflict ───────────────────────────────────────
+    if query.system and profile.total_orders >= 5:
+        expected = "metric" if profile.metric_ratio >= 0.70 else \
+                   "imperial" if profile.metric_ratio <= 0.30 else None
+        if expected and expected != query.system:
+            warnings.append(
+                f"This customer primarily orders {expected} parts "
+                f"({profile.metric_ratio:.0%} metric). "
+                f"Verify {query.system} sizing is intentional."
+            )
+
+    return warnings

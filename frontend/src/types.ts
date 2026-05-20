@@ -1,7 +1,12 @@
 export interface Customer {
-  customer_id:   string
-  customer_name: string
-  total_orders:  number
+  customer_id:       string
+  customer_name:     string
+  total_orders:      number
+  metric_ratio:      number
+  material_affinity: Record<string, number>
+  finish_affinity:   Record<string, number>
+  family_affinity:   Record<string, number>
+  sparse:            boolean
 }
 
 export interface BreakdownItem {
@@ -38,7 +43,9 @@ export interface QueryDebug {
 }
 
 export interface SearchResponse {
-  results:     MatchResult[]
-  query_debug: QueryDebug
-  referential: boolean
+  results:        MatchResult[]
+  query_debug:    QueryDebug
+  referential:    boolean
+  conflicts:      string[]
+  search_time_ms: number
 }

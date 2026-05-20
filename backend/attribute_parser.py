@@ -96,7 +96,7 @@ _STANDALONE_INCH = re.compile(r'\b(\d+(?:\.\d+)?)"', re.IGNORECASE)
 
 # Negative constraints: "not steel", "no zinc", "without brass"
 _NEGATIVE = re.compile(
-    r'\b(?:not|no|non|without|except|excluding)\s+(\w+(?:\s+\w+)?)',
+    r'\b(?:not|no|non|without|except|excluding)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)',
     re.IGNORECASE,
 )
 

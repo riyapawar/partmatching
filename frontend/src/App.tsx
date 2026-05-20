@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import type { Customer, SearchResponse, QueryDebug } from './types'
 import CustomerSelector from './components/CustomerSelector'
+import CustomerProfile from './components/CustomerProfile'
 import ResultCard from './components/ResultCard'
 
 const EXAMPLE_QUERIES = [
@@ -16,15 +17,40 @@ const EXAMPLE_QUERIES = [
   'brass hex nut 1/2-13',
 ]
 
-function DebugPanel({ debug }: { debug: QueryDebug }) {
-  const [open, setOpen] = useState(false)
-  const attrs = Object.entries(debug).filter(([, v]) => v !== null && v !== undefined && v !== '' &&
-    !(Array.isArray(v) && v.length === 0))
+function ConflictBanner({ conflicts }: { conflicts: string[] }) {
+  if (!conflicts.length) return null
+  return (
+    <div style={{
+      padding: '10px 14px', marginBottom: 16,
+      background: 'rgba(234,179,8,0.08)',
+      border: '1px solid rgba(234,179,8,0.35)',
+      borderRadius: 8,
+    }}>
+      <div style={{
+        fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+        color: '#eab308', marginBottom: 6, textTransform: 'uppercase',
+      }}>
+        ⚠ Preference conflict detected
+      </div>
+      {conflicts.map((c, i) => (
+        <div key={i} style={{ fontSize: 13, color: '#fde047', marginTop: i > 0 ? 4 : 0 }}>
+          {c}
+        </div>
+      ))}
+    </div>
+  )
+}
 
+function DebugPanel({ debug, ms }: { debug: QueryDebug; ms: number }) {
+  const [open, setOpen] = useState(false)
+  const attrs = Object.entries(debug).filter(([, v]) =>
+    v !== null && v !== undefined && v !== '' &&
+    !(Array.isArray(v) && v.length === 0)
+  )
   return (
     <div style={{
       marginTop: 24, background: 'var(--surface)',
-      border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden',
+      border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden',
     }}>
       <button
         onClick={() => setOpen(o => !o)}
@@ -34,16 +60,15 @@ function DebugPanel({ debug }: { debug: QueryDebug }) {
           display: 'flex', justifyContent: 'space-between',
         }}
       >
-        <span>Query parsing debug</span>
+        <span>Query parse · {ms}ms</span>
         <span>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div style={{ padding: '4px 16px 12px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {attrs.map(([k, v]) => (
             <div key={k} style={{
-              fontSize: 12,
-              background: 'var(--bg)', border: '1px solid var(--border)',
-              borderRadius: 4, padding: '3px 10px',
+              fontSize: 12, background: 'var(--bg)',
+              border: '1px solid var(--border)', borderRadius: 4, padding: '3px 10px',
             }}>
               <span style={{ color: 'var(--muted)' }}>{k}: </span>
               <span style={{ color: 'var(--accent)', fontFamily: 'monospace' }}>
@@ -58,12 +83,14 @@ function DebugPanel({ debug }: { debug: QueryDebug }) {
 }
 
 export default function App() {
-  const [customers, setCustomers]     = useState<Customer[]>([])
-  const [customerId, setCustomerId]   = useState<string | null>(null)
-  const [query, setQuery]             = useState('')
-  const [loading, setLoading]         = useState(false)
-  const [response, setResponse]       = useState<SearchResponse | null>(null)
-  const [error, setError]             = useState<string | null>(null)
+  const [customers, setCustomers]   = useState<Customer[]>([])
+  const [customerId, setCustomerId] = useState<string | null>(null)
+  const [query, setQuery]           = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [response, setResponse]     = useState<SearchResponse | null>(null)
+  const [error, setError]           = useState<string | null>(null)
+
+  const selectedCustomer = customers.find(c => c.customer_id === customerId) ?? null
 
   useEffect(() => {
     fetch('/api/customers')
@@ -75,11 +102,9 @@ export default function App() {
   async function handleSearch(q?: string) {
     const searchQuery = q ?? query
     if (!searchQuery.trim()) return
-
     setLoading(true)
     setError(null)
     setResponse(null)
-
     try {
       const res = await fetch('/api/search', {
         method:  'POST',
@@ -103,16 +128,32 @@ export default function App() {
     handleSearch(eq)
   }
 
+  async function flagForReview() {
+    if (!response) return
+    await fetch('/api/review', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        query,
+        customer_id: customerId,
+        results:     response.results,
+        reason:      'manual',
+      }),
+    })
+    alert('Flagged for review.')
+  }
+
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', padding: '40px 20px 80px' }}>
       {/* Header */}
       <div style={{ marginBottom: 36 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
           <div style={{
-            width: 36, height: 36, borderRadius: 8,
-            background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 18,
-          }}>⚙</div>
+            width: 36, height: 36, borderRadius: 8, background: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+          }}>
+            ⚙
+          </div>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>Paragon Part Match</h1>
         </div>
         <p style={{ color: 'var(--muted)', fontSize: 14 }}>
@@ -123,7 +164,7 @@ export default function App() {
       {/* Search area */}
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)', padding: 20, marginBottom: 16,
+        borderRadius: 10, padding: 20, marginBottom: 16,
       }}>
         <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
           <input
@@ -135,8 +176,7 @@ export default function App() {
             style={{
               flex: 1, padding: '12px 16px',
               background: 'var(--bg)', border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)', color: 'var(--text)', fontSize: 15,
-              outline: 'none', transition: 'border-color 0.15s',
+              borderRadius: 10, color: 'var(--text)', fontSize: 15, outline: 'none',
             }}
             onFocus={e  => (e.target.style.borderColor = 'var(--accent)')}
             onBlur={e   => (e.target.style.borderColor = 'var(--border)')}
@@ -145,11 +185,10 @@ export default function App() {
             onClick={() => handleSearch()}
             disabled={loading || !query.trim()}
             style={{
-              padding: '12px 24px', borderRadius: 'var(--radius)',
+              padding: '12px 24px', borderRadius: 10,
               background: 'var(--accent)', border: 'none', color: '#fff',
               fontSize: 14, fontWeight: 600,
               opacity: loading || !query.trim() ? 0.5 : 1,
-              transition: 'opacity 0.15s',
             }}
           >
             {loading ? 'Searching…' : 'Search'}
@@ -162,6 +201,10 @@ export default function App() {
           onSelect={setCustomerId}
           disabled={loading}
         />
+
+        {selectedCustomer && (
+          <CustomerProfile customer={selectedCustomer} />
+        )}
       </div>
 
       {/* Example queries */}
@@ -178,17 +221,10 @@ export default function App() {
               style={{
                 padding: '5px 12px', fontSize: 12,
                 background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 20, color: 'var(--muted)',
-                transition: 'all 0.15s',
+                borderRadius: 20, color: 'var(--muted)', transition: 'all 0.15s',
               }}
-              onMouseEnter={e => {
-                e.currentTarget.style.borderColor = 'var(--accent)'
-                e.currentTarget.style.color = 'var(--accent)'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.borderColor = 'var(--border)'
-                e.currentTarget.style.color = 'var(--muted)'
-              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)' }}
             >
               {eq}
             </button>
@@ -200,25 +236,24 @@ export default function App() {
       {error && (
         <div style={{
           padding: 16, background: 'rgba(239,68,68,0.1)',
-          border: '1px solid rgba(239,68,68,0.3)', borderRadius: 'var(--radius)',
+          border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10,
           color: '#ef4444', fontSize: 14, marginBottom: 20,
         }}>
           {error}
         </div>
       )}
 
-      {/* Loading skeleton */}
+      {/* Loading */}
       {loading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {[1, 2, 3].map(i => (
             <div key={i} style={{
               height: 140, background: 'var(--surface)',
-              border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-              animation: 'pulse 1.4s ease-in-out infinite',
-              opacity: 1 - i * 0.2,
+              border: '1px solid var(--border)', borderRadius: 10,
+              opacity: 1 - i * 0.2, animation: 'pulse 1.4s ease-in-out infinite',
             }} />
           ))}
-          <style>{`@keyframes pulse { 0%,100%{opacity:.6}50%{opacity:.3} }`}</style>
+          <style>{`@keyframes pulse{0%,100%{opacity:.6}50%{opacity:.3}}`}</style>
         </div>
       )}
 
@@ -235,10 +270,12 @@ export default function App() {
             </div>
           )}
 
+          <ConflictBanner conflicts={response.conflicts} />
+
           {response.results.length === 0 ? (
             <div style={{
               padding: 32, textAlign: 'center', color: 'var(--muted)',
-              background: 'var(--surface)', borderRadius: 'var(--radius)',
+              background: 'var(--surface)', borderRadius: 10,
               border: '1px solid var(--border)',
             }}>
               No matches found. Try a different description.
@@ -251,7 +288,23 @@ export default function App() {
             </div>
           )}
 
-          <DebugPanel debug={response.query_debug} />
+          {/* Flag for review button */}
+          {response.results.length > 0 && (
+            <div style={{ marginTop: 16, textAlign: 'right' }}>
+              <button
+                onClick={flagForReview}
+                style={{
+                  fontSize: 12, color: 'var(--muted)',
+                  background: 'none', border: '1px solid var(--border)',
+                  borderRadius: 6, padding: '5px 12px', cursor: 'pointer',
+                }}
+              >
+                Flag for human review
+              </button>
+            </div>
+          )}
+
+          <DebugPanel debug={response.query_debug} ms={response.search_time_ms} />
         </>
       )}
     </div>

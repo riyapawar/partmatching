@@ -2,7 +2,9 @@
 FastAPI application — Paragon Part Matching
 Run: uvicorn main:app --reload
 """
+import json
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -21,8 +23,13 @@ import backend.scorer          as scorer
 import backend.personalization as personalization
 import backend.reranker        as reranker
 from backend.attribute_parser  import parse, is_referential, ParsedAttributes
+from backend.personalization   import detect_conflicts
 
 load_dotenv()
+
+CACHE_DIR      = Path(__file__).parent / "cache"
+REVIEW_QUEUE   = CACHE_DIR / "review_queue.json"
+LOW_CONF_THRESHOLD = 0.40   # searches below this are auto-logged for review
 
 # ── Shared state ──────────────────────────────────────────────────────────────
 
@@ -36,15 +43,14 @@ async def lifespan(app: FastAPI):
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY not set. Copy .env.example → .env and add your key.")
+        raise RuntimeError("OPENAI_API_KEY not set. Copy .env.example -> .env and add your key.")
 
     _openai_client = OpenAI(api_key=api_key)
 
-    # Load (or build) catalog cache
     try:
         catalog, embeddings = preprocess.load()
     except FileNotFoundError:
-        print("[startup] Cache not found — running preprocessing now…")
+        print("[startup] Cache not found — running preprocessing now...")
         catalog, embeddings = preprocess.run()
 
     retrieval.init(catalog, embeddings)
@@ -52,6 +58,7 @@ async def lifespan(app: FastAPI):
     _customer_profiles = personalization.load_profiles()
     print(f"[startup] Loaded {len(_customer_profiles)} customer profiles.", flush=True)
 
+    CACHE_DIR.mkdir(exist_ok=True)
     yield
 
 
@@ -64,7 +71,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve built frontend if it exists
 _frontend_dist = Path(__file__).parent / "frontend" / "dist"
 if _frontend_dist.exists():
     app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
@@ -78,15 +84,29 @@ class SearchRequest(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    results:       list[dict]
-    query_debug:   dict
-    referential:   bool = False
+    results:        list[dict]
+    query_debug:    dict
+    referential:    bool = False
+    conflicts:      list[str] = []
+    search_time_ms: float = 0.0
 
 
 class CustomerOut(BaseModel):
-    customer_id:   str
-    customer_name: str
-    total_orders:  int
+    customer_id:       str
+    customer_name:     str
+    total_orders:      int
+    metric_ratio:      float
+    material_affinity: dict
+    finish_affinity:   dict
+    family_affinity:   dict
+    sparse:            bool
+
+
+class ReviewRequest(BaseModel):
+    query:       str
+    customer_id: Optional[str]
+    results:     list[dict]
+    reason:      str = "manual"
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -95,9 +115,15 @@ class CustomerOut(BaseModel):
 def get_customers():
     return [
         CustomerOut(
-            customer_id   = p.customer_id,
-            customer_name = p.customer_name,
-            total_orders  = p.total_orders,
+            customer_id       = p.customer_id,
+            customer_name     = p.customer_name,
+            total_orders      = p.total_orders,
+            metric_ratio      = round(p.metric_ratio, 3),
+            material_affinity = {k: round(v, 3) for k, v in p.material_affinity.items()},
+            finish_affinity   = {k: round(v, 3) for k, v in p.finish_affinity.items()},
+            family_affinity   = {k: round(v, 3) for k, v in
+                                  list(p.family_affinity.items())[:5]},
+            sparse            = p.sparse,
         )
         for p in _customer_profiles.values()
     ]
@@ -105,6 +131,8 @@ def get_customers():
 
 @app.post("/api/search", response_model=SearchResponse)
 def search(req: SearchRequest):
+    t0 = time.perf_counter()
+
     if not req.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
@@ -114,15 +142,20 @@ def search(req: SearchRequest):
     if is_referential(req.query) and profile:
         prior_orders = personalization.resolve_referential(req.query, profile)
         if prior_orders:
-            results = _orders_to_results(prior_orders, profile)
+            results = _orders_to_results(prior_orders)
             return SearchResponse(
-                results     = results,
-                query_debug = {"note": "resolved from order history", "query": req.query},
-                referential = True,
+                results        = results,
+                query_debug    = {"note": "resolved from order history", "query": req.query},
+                referential    = True,
+                conflicts      = [],
+                search_time_ms = _ms(t0),
             )
 
-    # ── Parse query ──────────────────────────────────────────────────────────
+    # ── Parse query ───────────────────────────────────────────────────────────
     query_parsed: ParsedAttributes = parse(req.query, expand_abbrevs=True)
+
+    # ── Conflict detection (before retrieval — shown regardless of results) ───
+    conflicts = detect_conflicts(query_parsed, profile)
 
     # ── Embed query ───────────────────────────────────────────────────────────
     query_vec = retrieval.embed_query(req.query, _openai_client)
@@ -137,9 +170,10 @@ def search(req: SearchRequest):
 
     if not candidates:
         return SearchResponse(
-            results     = [],
-            query_debug = _debug(query_parsed),
-            referential = False,
+            results        = [],
+            query_debug    = _debug(query_parsed),
+            conflicts      = conflicts,
+            search_time_ms = _ms(t0),
         )
 
     # ── Structured scoring ────────────────────────────────────────────────────
@@ -149,10 +183,8 @@ def search(req: SearchRequest):
     for s in scored:
         pers = personalization.personalize(query_parsed, s.candidate.parsed, profile)
         s.confidence = min(1.0, round(s.confidence + pers.boost, 4))
-        # Attach fills to candidate for formatting
         s.candidate._pers_fills = pers.fills  # type: ignore[attr-defined]
 
-    # Re-sort after personalization boost
     scored.sort(key=lambda s: s.confidence, reverse=True)
 
     # ── Conditional LLM reranking ─────────────────────────────────────────────
@@ -165,20 +197,47 @@ def search(req: SearchRequest):
             client      = _openai_client,
             history_ctx = history_ctx,
         )
-        # Inject personalization fills from scorer pass
         _inject_fills(results, scored)
     else:
         results = [reranker._format(s) for s in scored[:3]]
         _inject_fills(results, scored)
 
+    ms = _ms(t0)
+
+    # ── Auto-log low-confidence searches for review ───────────────────────────
+    if results and results[0].get("confidence", 1.0) < LOW_CONF_THRESHOLD:
+        _log_review(req.query, req.customer_id, results, reason="low_confidence")
+
     return SearchResponse(
-        results     = results,
-        query_debug = _debug(query_parsed),
-        referential = False,
+        results        = results,
+        query_debug    = _debug(query_parsed),
+        referential    = False,
+        conflicts      = conflicts,
+        search_time_ms = ms,
     )
 
 
+@app.post("/api/review")
+def submit_review(req: ReviewRequest):
+    """Manually flag a search result for human review."""
+    _log_review(req.query, req.customer_id, req.results, reason=req.reason)
+    return {"status": "logged"}
+
+
+@app.get("/api/review")
+def get_review_queue():
+    """Return all items in the review queue."""
+    if not REVIEW_QUEUE.exists():
+        return []
+    with open(REVIEW_QUEUE, encoding="utf-8") as f:
+        return json.load(f)
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _ms(t0: float) -> float:
+    return round((time.perf_counter() - t0) * 1000, 1)
+
 
 def _debug(parsed: ParsedAttributes) -> dict:
     return {
@@ -197,19 +256,17 @@ def _debug(parsed: ParsedAttributes) -> dict:
 def _history_context(profile) -> Optional[str]:
     if not profile or profile.sparse:
         return None
-    top_families = list(profile.family_affinity.keys())[:3]
+    top_families  = list(profile.family_affinity.keys())[:3]
     top_materials = list(profile.material_affinity.keys())[:2]
-    recent = [o["catalog_description"] for o in profile.recent_orders[:3]]
+    recent        = [o["catalog_description"] for o in profile.recent_orders[:3]]
     return (
         f"Customer prefers: families={top_families}, materials={top_materials}. "
         f"Recent orders: {recent}"
     )
 
 
-def _orders_to_results(orders: list[dict], profile) -> list[dict]:
-    """Convert raw order history entries to result format for referential queries."""
-    seen = set()
-    results = []
+def _orders_to_results(orders: list[dict]) -> list[dict]:
+    seen, results = set(), []
     for o in orders:
         sku = o["sku"]
         if sku in seen:
@@ -230,12 +287,32 @@ def _orders_to_results(orders: list[dict], profile) -> list[dict]:
     return results[:3]
 
 
-def _inject_fills(results: list[dict], scored: list["scorer.ScoredCandidate"]) -> None:
-    """Copy personalization fills from scored candidates into result dicts."""
+def _inject_fills(results: list[dict], scored: list) -> None:
     scored_map = {s.candidate.catalog_id: s for s in scored}
     for r in results:
         cid = r.get("catalog_id", "")
-        s = scored_map.get(cid)
+        s   = scored_map.get(cid)
         if s:
             fills = getattr(s.candidate, "_pers_fills", [])
             r["personalization_fills"] = fills
+
+
+def _log_review(query: str, customer_id: Optional[str],
+                results: list[dict], reason: str) -> None:
+    entry = {
+        "timestamp":   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "query":       query,
+        "customer_id": customer_id,
+        "reason":      reason,
+        "top_result":  results[0] if results else None,
+    }
+    queue: list = []
+    if REVIEW_QUEUE.exists():
+        try:
+            with open(REVIEW_QUEUE, encoding="utf-8") as f:
+                queue = json.load(f)
+        except Exception:
+            queue = []
+    queue.append(entry)
+    with open(REVIEW_QUEUE, "w", encoding="utf-8") as f:
+        json.dump(queue, f, indent=2, ensure_ascii=False)
