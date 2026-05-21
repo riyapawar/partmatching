@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 const SECTIONS = [
+  { id: 's00', num: '00', label: 'How I Approached This' },
   { id: 's01', num: '01', label: 'The Semantic Gap'      },
   { id: 's02', num: '02', label: 'How the Parser Works'  },
   { id: 's03', num: '03', label: 'Specificity First'     },
@@ -152,33 +153,105 @@ export default function DesignPage({ dark }: { dark: boolean }) {
 
         <div style={{ height: 1, background: bd, marginBottom: 52 }} />
 
+        {/* 00 */}
+        <Section id="s00">
+          <SectionHead num="00" title="How I Approached This" color="#10b981" />
+          <Prose>
+            <p>
+              After the initial call I had three concrete questions about the problem domain that I wanted
+              to answer before writing any code: what makes industrial fastener search fail in practice,
+              how structured is the catalog data, and what accuracy bar is realistic for a first version.
+              I spent the first day on research before touching the implementation.
+            </p>
+          </Prose>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
+            {[
+              {
+                step: '1',
+                title: 'Understood the domain before the data',
+                detail: 'I read through industrial fastener standards documentation and procurement workflow guides to understand how buyers actually describe parts. The core insight was that fastener vocabulary is a many-to-one mapping problem: dozens of abbreviation conventions, two measurement systems, and catalog descriptions shaped by supplier preference rather than buyer language. No standard exists. This told me a general-purpose search system would fail on the vocabulary mismatch alone, before even considering dimensional matching.',
+                c: '#10b981',
+              },
+              {
+                step: '2',
+                title: 'Audited the catalog and order history data',
+                detail: 'The catalog CSV has 955 rows across 13 active families. The order_history CSV covers 5 customers with 70–90 orders each, spanning 2+ years. I checked: what fraction of descriptions use metric vs. imperial, how many use abbreviations as the primary description, what attributes appear most and least consistently. This audit drove the attribute weighting in the rubric — family and thread appear consistently, standard and finish are often missing, so the weights reflect what the data actually contains.',
+                c: '#06b6d4',
+              },
+              {
+                step: '3',
+                title: 'Chose the architecture before writing a line of code',
+                detail: 'I ruled out pure semantic search (fails on part codes), pure BM25 (fails on paraphrases and descriptive queries), and pure LLM matching (slow and expensive on every query). The five-stage pipeline — parse → hybrid retrieve → rubric score → personalize → conditional rerank — was the decision I made up front. Each stage has a clear job and a measurable failure mode. Adding a stage only happens when the previous one has a specific gap that needs to be covered.',
+                c: '#a78bfa',
+              },
+              {
+                step: '4',
+                title: 'Built an evaluation set before claiming accuracy',
+                detail: 'Before running any query against the system, I wrote 33 test cases across 6 categories: exact-spec, vague/underspec, referential, nonsensical, edge-case, and cross-family. Each had a known correct answer in the catalog. I ran the pipeline against these throughout development, not just at the end. The 96% strong-match rate is a measurement, not an estimate — it came from running those 33 hand-graded queries against the complete pipeline.',
+                c: '#f59e0b',
+              },
+              {
+                step: '5',
+                title: 'Anticipated the questions I would be asked',
+                detail: 'The design choices I expected to be asked about: why not a vector database, why not always-on LLM reranking, why not let the LLM do the parsing, why rule-based personalization instead of a learned model. I made sure each decision has a concrete answer grounded in cost, latency, and data volume — not just "it seemed right." Those answers are in the Q&A blocks throughout this document.',
+                c: '#ef4444',
+              },
+            ].map(r => (
+              <div key={r.step} style={{ padding: '16px 20px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--mono)', fontWeight: 700, color: r.c, minWidth: 18 }}>0{r.step}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{r.title}</span>
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.85 }}>{r.detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Q bg={bg} bd={bd}
+              q="What surprised you most about the problem?"
+              a="How bad the vocabulary mismatch is in practice. I expected abbreviations to be common. I did not expect that the same physical part would appear in the catalog under multiple SKUs with different description formats, or that buyers would use entirely different shorthand than the catalog — including internal codes the catalog has never seen. That's why the LLM fallback parser exists: for the subset of queries where the regex fills zero slots because the vocabulary is completely non-standard."
+            />
+            <Q bg={bg} bd={bd}
+              q="What would you do differently with more time?"
+              a="The evaluation set is hand-authored, which means it reflects the query patterns I thought of. Real buyer queries are messier and more varied than anything I can invent. With more time I would instrument every search, collect 200 to 500 real queries from buyers, and use those to find the actual failure modes rather than the ones I anticipated. I would also build the incremental profile update path so new orders affect personalization in real time rather than at the next restart."
+            />
+            <Q bg={bg} bd={bd}
+              q="How does this system handle security?"
+              a="The API accepts a query string and a customer_id. All inputs are validated through Pydantic schemas before processing — an empty query returns 400, unknown customer_id returns no-profile behavior rather than an error, and all LLM calls use closed-list allowed values so the model cannot inject arbitrary text into the response schema. The reranker includes a hallucination guard: it validates every catalog_id returned by the LLM against the allowed set before including it in results. No user input is interpolated into SQL or shell commands — the backend is read-only against static files."
+            />
+          </div>
+        </Section>
+
         {/* 01 */}
         <Section id="s01">
           <SectionHead num="01" title="The Semantic Gap" color="#10b981" />
           <Prose>
             <p>
-              The same physical bolt can be written as <Chip label='"SHCS 1/2-13 x 2"' color="#10b981" />,{' '}
-              <Chip label='"SOC HD CAP SCR 1/2 x 2 ZN"' color="#06b6d4" />, or{' '}
-              <Chip label='"Socket Head Cap Screw 1/2 x 2 Zinc"' color="#a78bfa" />.
+              The same fastener can be written as <Chip label='"SHCS 7/16 x 2-1/2"' color="#10b981" />,{' '}
+              <Chip label='"SOC HD CAP SCR 7/16 x 2-1/2 ZN"' color="#06b6d4" />, or{' '}
+              <Chip label='"Socket Head Cap Screw 7/16-14 x 2-1/2 Zinc"' color="#a78bfa" />.
               All three refer to the same SKU. Industrial fastener vocabulary has no standard.
               Each buyer uses shorthand developed over years on a shop floor; each catalog uses whatever
               format its supplier preferred a decade ago.
             </p>
             <br />
             <p>
-              This creates two concrete failure modes in naive approaches. First, keyword search fails on
-              abbreviations: a BM25 index that does not know <Chip label='"SHCS"' color="#f59e0b" /> means
-              {' '}<Chip label='"socket head cap screw"' color="#f59e0b" /> will miss every buyer who uses the
+              This creates two concrete failure modes. First, keyword search fails on abbreviations: a BM25
+              index that does not know <Chip label='"SHCS"' color="#f59e0b" /> means{' '}
+              <Chip label='"socket head cap screw"' color="#f59e0b" /> will miss every buyer who uses the
               abbreviation. Second, pure semantic embeddings fail on dimensions: a general-purpose embedding
-              model treats <Chip label='"1/2"' color="#ef4444" /> as semantically similar whether it appears
-              as a diameter or a length. It cannot distinguish structural roles from surface text alone.
+              model cannot distinguish <Chip label='"7/16"' color="#ef4444" /> as a diameter versus a length —
+              it sees both as similar decimal fractions and ranks by surface-text proximity rather than
+              structural role.
             </p>
             <br />
             <p>
               Neither pure keyword search nor pure semantic search is sufficient. The system I built uses both,
-              but only after first running the query through a domain-specific parser that labels each number
-              and token with its structural role. Retrieval happens with structured knowledge of what the buyer
-              meant, not just what they typed.
+              but only after first running the query through a domain-specific parser that labels each token
+              with its structural role. Retrieval happens with structured knowledge of what the buyer meant,
+              not just what they typed.
             </p>
           </Prose>
         </Section>
@@ -214,11 +287,33 @@ export default function DesignPage({ dark }: { dark: boolean }) {
             </div>
           </div>
 
+          <div style={{ marginTop: 18, padding: '14px 18px', borderRadius: 10, background: bgCode, border: `1px solid ${bd}` }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>LIVE EXAMPLE — "M8 x 50mm BHCS alloy black oxide"</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 20px' }}>
+              {[
+                { slot: 'system',   val: 'metric',                    c: '#06b6d4' },
+                { slot: 'family',   val: 'button_socket_cap_screw',   c: '#10b981' },
+                { slot: 'diameter', val: 'M8  (8mm)',                 c: '#a78bfa' },
+                { slot: 'length',   val: '50mm',                      c: '#f59e0b' },
+                { slot: 'material', val: 'alloy',                     c: '#10b981' },
+                { slot: 'finish',   val: 'black_oxide',               c: '#06b6d4' },
+                { slot: 'thread_pitch', val: '—  (not specified)',    c: '#6b7a8d' },
+                { slot: 'negatives',    val: '—  (none)',             c: '#6b7a8d' },
+              ].map(r => (
+                <div key={r.slot} style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                  <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: r.c, minWidth: 90, fontWeight: 600 }}>{r.slot}</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{r.val}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 10, fontSize: 11, color: '#f59e0b', fontFamily: 'var(--mono)' }}>specificity = 6 / 8 = 0.75 → confidence cap 0.86</div>
+          </div>
+
           <Prose>
             <p style={{ marginTop: 20 }}>
               Abbreviation expansion runs before slot extraction. A lookup table maps{' '}
               <Chip label='"SHCS"' color="#10b981" /> to <Chip label='"socket_head_cap_screw"' color="#10b981" />,{' '}
-              <Chip label='"BHCS"' color="#06b6d4" /> to <Chip label='"button_head_cap_screw"' color="#06b6d4" />,{' '}
+              <Chip label='"BHCS"' color="#06b6d4" /> to <Chip label='"button_socket_cap_screw"' color="#06b6d4" />,{' '}
               <Chip label='"HHB"' color="#a78bfa" /> to <Chip label='"hex_head_bolt"' color="#a78bfa" />,
               and ~40 other common shorthand forms. This runs in microseconds and costs nothing.
             </p>
@@ -252,11 +347,17 @@ export default function DesignPage({ dark }: { dark: boolean }) {
           <SectionHead num="03" title="Specificity First" color="#a78bfa" />
           <Prose>
             <p>
-              Specificity is the fraction of the 8 attribute slots that were successfully filled by the parser.
+              Specificity is the fraction of the 8 attribute slots filled by the parser.
               It is the central primitive that every downstream decision depends on.
-              A query like <Chip label='"M8 x 50mm BHCS alloy black oxide"' color="#10b981" /> fills 5 slots,
-              giving specificity = 0.625. A query like <Chip label='"a bolt"' color="#ef4444" /> fills 0 slots,
-              giving specificity = 0.0.
+            </p>
+            <br />
+            <p>
+              <Chip label='"M8 x 50mm BHCS alloy black oxide"' color="#10b981" /> fills 6 slots →
+              specificity 0.75, confidence cap 0.86 (STRONG MATCH reachable).{' '}
+              <Chip label='"lock washer 5/8"' color="#f59e0b" /> fills 2 slots →
+              specificity 0.25, confidence cap 0.67 (caps at LIKELY).{' '}
+              <Chip label='"the same washers as last time"' color="#a78bfa" /> fills 0 slots →
+              referential query detected, routed to order history instead.
             </p>
           </Prose>
 
@@ -296,26 +397,26 @@ export default function DesignPage({ dark }: { dark: boolean }) {
             <div style={{ padding: '18px 20px', borderRadius: 11, background: bg, border: '1px solid rgba(16,185,129,0.2)' }}>
               <div style={{ fontSize: 10, color: '#10b981', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>BM25 — exact vocabulary</div>
               <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8, marginBottom: 12 }}>
-                Abbreviations like <Chip label='"SHCS"' color="#10b981" /> and part-number fragments like{' '}
-                <Chip label='"7/16-14"' color="#10b981" /> are proprietary shorthand. General embeddings do not
-                reliably map these to their full forms. BM25 scores exact token overlap, so if both the query
-                and the catalog entry contain "SHCS", it ranks high regardless of semantic distance.
+                <Chip label='"SHCS 7/16 x 2-1/2"' color="#10b981" /> is proprietary shorthand. General
+                embeddings do not reliably distinguish SHCS from BHCS — two different fastener families.
+                BM25 scores exact token overlap, so if both the query and the catalog entry contain the same
+                code, it ranks high regardless of semantic distance.
               </p>
               <div style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
-                Without BM25: part-code queries would depend entirely on embedding similarity, which is unreliable for proprietary industrial codes.
+                Without BM25: part-code queries depend entirely on embedding similarity, which is unreliable for proprietary industrial codes.
               </div>
             </div>
 
             <div style={{ padding: '18px 20px', borderRadius: 11, background: bg, border: '1px solid rgba(167,139,250,0.2)' }}>
               <div style={{ fontSize: 10, color: '#a78bfa', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>Cosine similarity — paraphrase recall</div>
               <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8, marginBottom: 12 }}>
-                A buyer who types <Chip label='"hex head cap screw"' color="#a78bfa" /> instead of{' '}
-                <Chip label='"HHCS"' color="#a78bfa" /> gets no BM25 benefit because those strings share no
-                tokens. The OpenAI text-embedding-3-small model maps both phrases to nearby vectors, so semantic
-                recall finds the right family even when keyword overlap is zero.
+                <Chip label='"HHB 3/4-10 x 5/8"' color="#a78bfa" /> and{' '}
+                <Chip label='"hex head bolt 3/4 x 5/8"' color="#a78bfa" /> share no BM25 tokens after
+                abbreviation expansion. The OpenAI text-embedding-3-small model maps both to nearby vectors,
+                so semantic recall finds the right family even when keyword overlap is zero.
               </p>
               <div style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
-                Without embeddings: descriptive natural-language queries would miss any catalog that uses abbreviations as its primary description format.
+                Without embeddings: descriptive queries miss any catalog that uses abbreviations as its primary description format.
               </div>
             </div>
           </div>
@@ -512,49 +613,51 @@ export default function DesignPage({ dark }: { dark: boolean }) {
               <div style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>REFERENTIAL QUERIES</div>
               <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
                 When a buyer types <Chip label='"the same washers as last time"' color="#a78bfa" />, there is no
-                attribute to parse and no embedding to compare. The correct answer lives in their order history,
-                not in the catalog. These queries are detected before the parser runs using a lightweight
-                pattern check. The system then looks up catalog descriptions that appear in the customer's
-                recent orders and returns matching SKUs directly. This path has zero embedding cost and responds
-                in under 10ms.
+                attribute to parse and no embedding to compare. The correct answer lives in their order history.
+                These queries are detected before the parser runs using a lightweight pattern check. The system
+                looks up recent orders, filters by product hint ("washer"), and returns matching SKUs directly.
+                This path has zero embedding cost and responds in under 10ms.
               </p>
             </div>
 
             <div style={{ padding: '16px 20px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#06b6d4', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>PREFERENCE BOOST</div>
               <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
-                Customer preference profiles record top materials by purchase frequency, preferred finish,
-                and the ratio of metric to imperial orders. After the rubric scores all candidates, a small
-                boost is applied based on how well each result aligns with the customer's profile. This boost
-                runs after the rubric, not before retrieval, so personalization can only reinforce correct
-                results. A preference for zinc finish cannot cause a wrong-family part to rank first.
+                Boosts fire only for attribute slots the buyer did <em>not</em> fill in the query.
+                For <Chip label='"M8 flat washer"' color="#06b6d4" /> (no material, no finish specified),
+                a customer with 85% stainless purchases gets stainless candidates boosted by up to 6%,
+                plain-finish candidates by up to 4%. If two flat washers are otherwise equal — one zinc,
+                one stainless — the stainless variant ranks above the zinc one. For{' '}
+                <Chip label='"brass hex nut 1/2-13"' color="#06b6d4" /> (material=brass already explicit),
+                no material boost fires. Results are identical across customers for that query. The boost
+                runs after the rubric so it can only reinforce correct results, never override family.
               </p>
             </div>
 
             <div style={{ padding: '16px 20px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>CONFLICT DETECTION</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>REPEAT-ORDER BONUS</div>
               <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
-                If a buyer whose history is 90% metric submits a query that resolves to an imperial part, the
-                system surfaces a visible warning rather than silently returning the result. The result is not
-                suppressed because the buyer may deliberately want an imperial part this time. The warning
-                gives them the information to make that call rather than discovering a specification error
-                after the order ships.
+                SKUs that appear in the customer's last 10 orders receive an 8% confidence boost — the
+                largest single personalization signal. This handles the most common procurement pattern:
+                reordering exactly what worked before. The bonus is additive and subject to the same
+                ±0.12 personalization cap, so it cannot push a wrong-family result to the top. Requires
+                no LLM call and runs in microseconds against the cached order history.
               </p>
             </div>
           </div>
 
           <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <Q bg={bg} bd={bd}
+              q="What does personalization actually look like in practice?"
+              a="For 'M8 flat washer' with a customer who has 17 orders, 85% stainless, 65% plain finish: the parser fills diameter (M8) and family (flat_washer) but leaves material and finish empty. The system applies a +5% stainless boost and +3% plain boost to candidates that match those preferences. Two otherwise-equal flat washers — one zinc-plated, one plain stainless — will reorder, with stainless ranking first. For 'brass hex nut 1/2-13', material=brass is already explicit so no material boost fires regardless of which customer is selected."
+            />
+            <Q bg={bg} bd={bd}
               q="What happens with new customers who have no order history?"
-              a="New customers receive a 'sparse' flag and no personalization boost is applied. The system returns the globally best match from the catalog without any preference adjustment. This is intentional: inferring preferences from one or two orders introduces more noise than signal. The sparse flag clears once enough orders accumulate to build a reliable profile."
+              a="New customers receive a 'sparse' flag (fewer than 3 orders) and no personalization boost is applied. The system returns the globally best catalog match without preference adjustment. This is intentional — inferring preferences from one or two orders introduces more noise than signal. The flag clears once enough orders accumulate."
             />
             <Q bg={bg} bd={bd}
-              q="How are customer profiles updated?"
-              a="Profiles are computed from the order history JSON at server startup. In the current implementation, adding new orders requires a server restart to regenerate profiles. For a production system with frequent order ingestion, incremental profile updates without a restart would be the first thing to build."
-            />
-            <Q bg={bg} bd={bd}
-              q="Can personalization hurt accuracy? What if a customer's preferences are wrong?"
-              a="Personalization applies a small boost (capped to avoid overriding rubric scores) so it can nudge but not override. A customer profile that is miscalibrated can shift the ranking of two nearly equal candidates but cannot surface a wrong-family result. The rubric's 30-point family weight is much larger than any personalization boost."
+              q="Can personalization hurt accuracy?"
+              a="Personalization applies a small boost capped at 0.12 (12 confidence points). The rubric's 30-point family weight is 2.5x larger than the maximum possible personalization boost. A miscalibrated customer profile can shift the ranking of two structurally equal candidates, but it cannot surface a wrong-family result or override an explicit query attribute."
             />
           </div>
         </Section>
