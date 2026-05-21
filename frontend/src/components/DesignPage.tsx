@@ -1,79 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 const SECTIONS = [
-  { id: 's01', num: '01', label: 'The Problem'       },
-  { id: 's02', num: '02', label: 'Questions First'   },
-  { id: 's03', num: '03', label: 'Edge Cases'        },
-  { id: 's04', num: '04', label: 'Algorithm'         },
-  { id: 's05', num: '05', label: 'Design Principles' },
-  { id: 's06', num: '06', label: 'Key Decisions'     },
-  { id: 's07', num: '07', label: 'Pipeline'          },
-  { id: 's08', num: '08', label: 'How AI Was Used'   },
-  { id: 's09', num: '09', label: 'Tradeoffs'         },
-]
-
-const DECISIONS = [
-  {
-    color: '#10b981',
-    tag:   'QUERY UNDERSTANDING',
-    title: 'Domain-Specific Parser',
-    body:  'A regex + heuristic parser extracts 8 typed attributes from free text: family, diameter, thread pitch, length, material, finish, measurement system, and negative constraints. Queries with 0 recognized attributes are hard-rejected before touching the embedding model.',
-    why:   'Industrial queries are highly structured but inconsistently phrased. The early-rejection gate saves ~$0.002/call in embedding costs.',
-  },
-  {
-    color: '#06b6d4',
-    tag:   'RETRIEVAL',
-    title: 'Hybrid BM25 + Embeddings',
-    body:  'BM25 handles exact keyword precision (part numbers, abbreviations like "SHCS"). OpenAI text-embedding-3-small handles semantic recall — "hex head cap screw" maps to "SHCS". Both scan all 955 SKUs and return top-20 each.',
-    why:   'Neither retriever alone covers the full query space. Combining them achieves 96%+ strong-match rate across the eval set.',
-  },
-  {
-    color: '#a78bfa',
-    tag:   'FUSION',
-    title: 'Reciprocal Rank Fusion (k=60)',
-    body:  'The two retrieval lists are merged via RRF: score = Σ 1/(k + rankᵢ). Rank-based rather than score-based, which prevents either retriever from dominating due to incompatible score scales.',
-    why:   'Score-based fusion requires careful calibration when mixing BM25 and cosine outputs. RRF is parameter-light and calibration-free.',
-  },
-  {
-    color: '#f59e0b',
-    tag:   'SCORING',
-    title: '100-Point Attribute Rubric',
-    body:  'Family match (30 pts), thread (25), length (20), material (10), finish (5), standard (5), negatives (−50 if violated). Per-attribute status — exact / compatible / mismatch / not_in_catalog — is tracked for the breakdown panel.',
-    why:   'Procurement workflows require human-auditable reasoning. A visible breakdown lets buyers confirm or challenge automated picks.',
-  },
-  {
-    color: '#10b981',
-    tag:   'RERANKING',
-    title: 'Conditional GPT-4o-mini Rerank',
-    body:  'A secondary LLM pass fires only when: (a) the top-2 score gap < 10%, or (b) specificity < 0.17. The LLM returns a plain-English reason string shown in the result card.',
-    why:   'Always-on LLM reranking adds 800ms and costs ~$0.0015/query. The conditional gate triggers on ~30% of queries, cutting LLM cost by 70%.',
-  },
-  {
-    color: '#06b6d4',
-    tag:   'CONFIDENCE',
-    title: 'Specificity-Weighted Caps',
-    body:  'Confidence is capped at 0.58 + 0.37 × specificity. A 1-attribute query can reach at most 63% even with high cosine similarity. Labels: STRONG ≥ 85%, LIKELY ≥ 65%, POSSIBLE ≥ 45%, REVIEW < 45%.',
-    why:   'Raw similarity scores reward vague queries. Specificity-weighting ensures confidence reflects how well the query was understood.',
-  },
-  {
-    color: '#a78bfa',
-    tag:   'PERSONALIZATION',
-    title: 'Customer Preference Profiles',
-    body:  'Each customer\'s order history is parsed into a preference profile: top materials and finishes by frequency, metric vs. imperial ratio, order volume. Results surface personalization fills and conflict warnings.',
-    why:   'Repeat customers have established specs. Historical context reduces re-inquiry calls, prevents spec errors, and surfaces cross-sell opportunities.',
-  },
-  {
-    color: '#f59e0b',
-    tag:   'DEPLOYMENT',
-    title: 'Railway + Vercel Split',
-    body:  'FastAPI runs as a persistent process on Railway, keeping BM25 and embedding caches in memory. React is served from Vercel CDN with /api/* proxied via vercel.json — no CORS config needed.',
-    why:   'Serverless would cold-start BM25 on every request (~2–5s latency). A persistent process keeps p95 under 250ms.',
-  },
+  { id: 's01', num: '01', label: 'The Semantic Gap'       },
+  { id: 's02', num: '02', label: 'Specificity First'      },
+  { id: 's03', num: '03', label: 'Two Retrievers'         },
+  { id: 's04', num: '04', label: 'Teaching "Match"'       },
+  { id: 's05', num: '05', label: 'When to Ask GPT'        },
+  { id: 's06', num: '06', label: 'History as Signal'      },
+  { id: 's07', num: '07', label: 'Honest Confidence'      },
+  { id: 's08', num: '08', label: "What I'd Build Next"   },
 ]
 
 function Section({ id, children }: { id: string; children: React.ReactNode }) {
   return (
-    <section id={id} style={{ marginBottom: 64, scrollMarginTop: 24 }}>
+    <section id={id} style={{ marginBottom: 72, scrollMarginTop: 24 }}>
       {children}
     </section>
   )
@@ -81,25 +21,26 @@ function Section({ id, children }: { id: string; children: React.ReactNode }) {
 
 function SectionHead({ num, title, color = '#10b981' }: { num: string; title: string; color?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
-      <span style={{
-        fontSize: 11, fontWeight: 700, fontFamily: 'var(--mono)',
-        color, opacity: 0.7, minWidth: 24,
-      }}>{num}</span>
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+      <span style={{ fontSize: 32, fontWeight: 800, fontFamily: 'var(--mono)', color, opacity: 0.22, lineHeight: 1 }}>
+        {num}
+      </span>
       <h2 style={{
         fontFamily: "'Playfair Display', Georgia, serif",
-        fontSize: 26, fontWeight: 700, color: 'var(--text)', lineHeight: 1.2,
+        fontSize: 24, fontWeight: 700, color: 'var(--text)', lineHeight: 1.25, marginBottom: 2,
       }}>{title}</h2>
     </div>
   )
 }
 
-function Callout({ color, children }: { color: string; children: React.ReactNode }) {
+function Pull({ children, color = '#10b981' }: { color?: string; children: React.ReactNode }) {
   return (
     <div style={{
+      margin: '24px 0', padding: '16px 20px',
       borderLeft: `3px solid ${color}`,
-      paddingLeft: 16, marginTop: 16, marginBottom: 16,
-      fontSize: 13, color: 'var(--muted)', lineHeight: 1.8,
+      fontSize: 15, fontStyle: 'italic',
+      color: 'var(--text)', lineHeight: 1.75,
+      opacity: 0.85,
     }}>
       {children}
     </div>
@@ -108,24 +49,55 @@ function Callout({ color, children }: { color: string; children: React.ReactNode
 
 function Prose({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.9, maxWidth: 680 }}>
+    <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.95, maxWidth: 660 }}>
       {children}
     </div>
   )
 }
 
-function PipelineStep({ num, label, sub, color }: { num: string; label: string; sub: string; color: string }) {
+function Chip({ label, color }: { label: string; color: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-      <div style={{
-        width: 36, height: 36, borderRadius: 9, flexShrink: 0,
-        background: `${color}15`, border: `1px solid ${color}40`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 11, fontWeight: 700, color, fontFamily: 'var(--mono)',
-      }}>{num}</div>
-      <div style={{ paddingTop: 2 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>{sub}</div>
+    <span style={{
+      display: 'inline-block', fontSize: 10, fontFamily: 'var(--mono)',
+      padding: '2px 8px', borderRadius: 4,
+      background: `${color}12`, border: `1px solid ${color}30`, color,
+    }}>{label}</span>
+  )
+}
+
+function InlineBox({ title, children, color, dark }: { title: string; children: React.ReactNode; color: string; dark: boolean }) {
+  const bg = dark ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.85)'
+  const bd = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)'
+  return (
+    <div style={{ padding: '16px 20px', borderRadius: 10, background: bg, border: `1px solid ${bd}`, marginTop: 16 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 10 }}>{title}</div>
+      {children}
+    </div>
+  )
+}
+
+function Formula({ dark }: { dark: boolean }) {
+  const bg = dark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.04)'
+  const bd = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)'
+  return (
+    <div style={{ padding: '18px 22px', borderRadius: 10, background: bg, border: `1px solid ${bd}`, fontFamily: 'var(--mono)', marginTop: 20 }}>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>CONFIDENCE CAP FORMULA</div>
+      <div style={{ fontSize: 18, color: 'var(--text)', fontWeight: 600, marginBottom: 16, letterSpacing: '-0.01em' }}>
+        cap = <span style={{ color: '#10b981' }}>0.58</span> + <span style={{ color: '#06b6d4' }}>0.37</span> × <span style={{ color: '#a78bfa' }}>specificity</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {[
+          { spec: '0.0', cap: '0.58 (58%)', note: 'no attributes recognized — POSSIBLE at best', c: '#ef4444' },
+          { spec: '0.125', cap: '0.63 (63%)', note: '1 of 8 attributes — still can\'t exceed LIKELY', c: '#f59e0b' },
+          { spec: '0.5', cap: '0.77 (77%)', note: '4 of 8 attributes — can reach LIKELY', c: '#f59e0b' },
+          { spec: '1.0', cap: '0.95 (95%)', note: 'all 8 attributes — STRONG MATCH is possible', c: '#10b981' },
+        ].map(r => (
+          <div key={r.spec} style={{ display: 'grid', gridTemplateColumns: '70px 90px 1fr', gap: 12, alignItems: 'baseline', fontSize: 11 }}>
+            <span style={{ color: '#a78bfa' }}>spec={r.spec}</span>
+            <span style={{ color: r.c, fontWeight: 600 }}>→ {r.cap}</span>
+            <span style={{ color: 'var(--muted)' }}>{r.note}</span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -133,7 +105,6 @@ function PipelineStep({ num, label, sub, color }: { num: string; label: string; 
 
 export default function DesignPage({ dark }: { dark: boolean }) {
   const [active, setActive] = useState('s01')
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const scrollTo = (id: string) => {
     const el = document.getElementById(id)
@@ -142,102 +113,84 @@ export default function DesignPage({ dark }: { dark: boolean }) {
 
   useEffect(() => {
     const observer = new IntersectionObserver(
-      entries => {
-        entries.forEach(e => { if (e.isIntersecting) setActive(e.target.id) })
-      },
+      entries => { entries.forEach(e => { if (e.isIntersecting) setActive(e.target.id) }) },
       { rootMargin: '-20% 0px -70% 0px', threshold: 0 }
     )
-    SECTIONS.forEach(s => {
-      const el = document.getElementById(s.id)
-      if (el) observer.observe(el)
-    })
+    SECTIONS.forEach(s => { const el = document.getElementById(s.id); if (el) observer.observe(el) })
     return () => observer.disconnect()
   }, [])
 
-  const bd = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)'
-  const panelBg = dark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.85)'
+  const bd     = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)'
+  const bg     = dark ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.85)'
+  const bgCode = dark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.04)'
 
   return (
-    <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, alignItems: 'start' }}>
+    <div className="fade-in" style={{ display: 'grid', gridTemplateColumns: '196px 1fr', gap: 44, alignItems: 'start' }}>
 
       {/* ── Sidebar ── */}
       <div style={{ position: 'sticky', top: 24 }}>
         <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 18 }}>
-          DESIGN DOCUMENT
+          ENGINEERING NOTES
         </div>
         <nav>
           {SECTIONS.map(s => {
-            const isActive = active === s.id
+            const on = active === s.id
             return (
-              <button
-                key={s.id}
-                onClick={() => scrollTo(s.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  width: '100%', textAlign: 'left',
-                  padding: '7px 10px', borderRadius: 7, marginBottom: 2,
-                  background: isActive ? 'rgba(16,185,129,0.08)' : 'none',
-                  border: `1px solid ${isActive ? 'rgba(16,185,129,0.25)' : 'transparent'}`,
-                  transition: 'all 0.15s',
-                }}
-              >
-                <span style={{
-                  fontSize: 9, fontFamily: 'var(--mono)', color: isActive ? '#10b981' : 'var(--muted)',
-                  minWidth: 18, fontWeight: 700,
-                }}>{s.num}</span>
-                <span style={{ fontSize: 12, color: isActive ? 'var(--text)' : 'var(--muted)', fontWeight: isActive ? 600 : 400 }}>
-                  {s.label}
-                </span>
+              <button key={s.id} onClick={() => scrollTo(s.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                width: '100%', textAlign: 'left',
+                padding: '7px 10px', borderRadius: 7, marginBottom: 2,
+                background: on ? 'rgba(16,185,129,0.08)' : 'none',
+                border: `1px solid ${on ? 'rgba(16,185,129,0.22)' : 'transparent'}`,
+                transition: 'all 0.15s',
+              }}>
+                <span style={{ fontSize: 9, fontFamily: 'var(--mono)', color: on ? '#10b981' : 'var(--muted)', minWidth: 18, fontWeight: 700 }}>{s.num}</span>
+                <span style={{ fontSize: 12, color: on ? 'var(--text)' : 'var(--muted)', fontWeight: on ? 600 : 400 }}>{s.label}</span>
               </button>
             )
           })}
         </nav>
 
-        {/* Metrics */}
-        <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 7 }}>
           {[
-            { v: '96%',   l: 'strong-match rate', c: '#10b981' },
-            { v: '955',   l: 'active SKUs',        c: '#06b6d4' },
-            { v: '<250ms',l: 'p95 latency',        c: '#a78bfa' },
-            { v: '~70%',  l: 'LLM cost saved',     c: '#f59e0b' },
+            { v: '96%',    l: 'strong-match rate', c: '#10b981' },
+            { v: '955',    l: 'active SKUs',        c: '#06b6d4' },
+            { v: '<250ms', l: 'p95 latency',        c: '#a78bfa' },
+            { v: '~30%',   l: 'LLM trigger rate',   c: '#f59e0b' },
           ].map(m => (
-            <div key={m.l} style={{
-              padding: '10px 12px', borderRadius: 8,
-              background: panelBg, border: `1px solid ${bd}`,
-            }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: m.c, fontFamily: 'var(--mono)', lineHeight: 1 }}>{m.v}</div>
+            <div key={m.l} style={{ padding: '9px 12px', borderRadius: 8, background: bg, border: `1px solid ${bd}` }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: m.c, fontFamily: 'var(--mono)', lineHeight: 1 }}>{m.v}</div>
               <div style={{ fontSize: 9, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginTop: 3 }}>{m.l}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── Main content ── */}
-      <div ref={containerRef}>
+      {/* ── Content ── */}
+      <div>
 
         {/* Hero */}
         <div style={{ marginBottom: 52 }}>
           <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7,
+            display: 'inline-flex', alignItems: 'center', gap: 7, marginBottom: 20,
             fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
             color: '#10b981', background: 'rgba(16,185,129,0.07)',
-            border: '1px solid rgba(16,185,129,0.2)', padding: '5px 14px',
-            borderRadius: 20, marginBottom: 20,
+            border: '1px solid rgba(16,185,129,0.2)', padding: '5px 14px', borderRadius: 20,
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
-            DESIGN DECISIONS · PARAGON PART MATCHING
+            ENGINEERING NOTES · PARAGON PART MATCHING
           </div>
           <h1 style={{
             fontFamily: "'Playfair Display', Georgia, serif",
-            fontSize: 44, fontWeight: 800, lineHeight: 1.12,
+            fontSize: 42, fontWeight: 800, lineHeight: 1.12,
             color: 'var(--text)', marginBottom: 14, letterSpacing: '-0.01em',
           }}>
-            Every decision<br /><span style={{ color: '#10b981' }}>has a reason.</span>
+            Eight decisions.<br /><span style={{ color: '#10b981' }}>Each one earned.</span>
           </h1>
-          <p style={{ fontSize: 14, color: 'var(--muted)', maxWidth: 580, lineHeight: 1.8 }}>
-            This system was built specifically for industrial fastener procurement — not adapted from
-            a generic search template. Each architectural choice addresses a real failure mode in
-            part-matching workflows.
+          <p style={{ fontSize: 14, color: 'var(--muted)', maxWidth: 560, lineHeight: 1.85 }}>
+            These are not generic ML pipeline choices. They are the specific things I had to figure out
+            to make part matching work for industrial fasteners — a domain where the vocabulary is proprietary,
+            the queries are terse, and wrong results cost real money.
           </p>
         </div>
 
@@ -245,43 +198,69 @@ export default function DesignPage({ dark }: { dark: boolean }) {
 
         {/* 01 */}
         <Section id="s01">
-          <SectionHead num="01" title="The Problem" color="#10b981" />
+          <SectionHead num="01" title="The Semantic Gap" color="#10b981" />
           <Prose>
-            <p>When a procurement buyer types <span style={{ color: '#10b981', fontFamily: 'var(--mono)' }}>"1/2 SHCS 2 inch zinc"</span>, they're
-            expressing a five-dimensional specification in five tokens. The same physical part might be described as
-            <span style={{ color: '#06b6d4', fontFamily: 'var(--mono)' }}> "SOC SHCS 1/2-13 x 2 zinc plated"</span> in one catalog and
-            <span style={{ color: '#a78bfa', fontFamily: 'var(--mono)' }}> "Socket Head Cap Screw 1/2" × 2" ZN"</span> in another.
-            There is no standardized vocabulary.</p>
+            <p>
+              The same physical bolt can be described as{' '}
+              <Chip label='"SHCS 1/2-13 x 2"' color="#10b981" />,{' '}
+              <Chip label='"SOC HD CAP SCR 1/2 x 2 ZN"' color="#06b6d4" />,{' '}
+              or <Chip label='"Socket Head Cap Screw 1/2" × 2" Zinc"' color="#a78bfa" /> — all referring to exactly
+              the same SKU. There is no standardized industrial fastener vocabulary. Every buyer uses their own shorthand,
+              every catalog uses its own format.
+            </p>
             <br />
-            <p>Generic full-text search — which treats this like a document retrieval problem — fails because it can't
-            distinguish <em>"zinc"</em> as a finish modifier from <em>"zinc"</em> as a company name, or <em>"1/2"</em> as a diameter
-            from <em>"1/2"</em> as a length fraction. Cosine similarity over raw text embeddings collapses these distinctions entirely.</p>
+            <p>
+              This breaks naive approaches in two specific ways. First, keyword search fails on abbreviations:
+              a BM25 index that doesn't know <Chip label='"SHCS"' color="#f59e0b" /> means{' '}
+              <Chip label='"socket head cap screw"' color="#f59e0b" /> will miss half of all queries.
+              Second, semantic embeddings fail on dimensions: a vector model sees <Chip label='"1/2"' color="#ef4444" /> as
+              a similar token in both "diameter = 1/2 inch" and "length = 1/2 inch" — it cannot resolve the structural
+              difference without knowing what role each number plays.
+            </p>
           </Prose>
-          <Callout color="#10b981">
-            The core problem isn't search. It's understanding what a buyer means before deciding what to show them.
-          </Callout>
+          <Pull color="#10b981">
+            The problem isn't finding parts — it's parsing what the buyer meant before you decide which parts to find.
+          </Pull>
+          <Prose>
+            <p>
+              The solution I landed on is to not treat this as a retrieval problem first. Before any candidate is
+              fetched, the query goes through a domain-specific parser that extracts up to 8 typed attribute slots:
+              family, diameter, thread pitch, length, material, finish, measurement system, and negative constraints.
+              Only then does retrieval begin — now with structured knowledge of what the buyer actually asked for.
+            </p>
+          </Prose>
         </Section>
 
         {/* 02 */}
         <Section id="s02">
-          <SectionHead num="02" title="Questions First" color="#06b6d4" />
+          <SectionHead num="02" title="Specificity First" color="#06b6d4" />
           <Prose>
-            <p>Before writing any code, I mapped the design space as a series of questions:</p>
+            <p>
+              Specificity is the central primitive I built the whole system around. It's a simple number:
+              the fraction of the 8 possible attribute slots that the parser was able to fill from the query.
+              A query like <Chip label='"M8 x 50mm BHCS alloy black oxide"' color="#10b981" /> fills 5 slots → specificity = 0.625.
+              A query like <Chip label='"a bolt"' color="#ef4444" /> fills 0 slots → specificity = 0.0.
+            </p>
           </Prose>
-          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Pull color="#06b6d4">
+            Specificity answers a question that confidence alone can't: not "how good is this match?" but "how well did we understand the query?"
+          </Pull>
+          <Prose>
+            <p>Specificity drives three separate decisions in the pipeline:</p>
+          </Prose>
+
+          <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
-              { q: 'What does "strong match" actually mean?',  a: 'The correct SKU appears as the top result — not just in the top 3.' },
-              { q: 'How do I distinguish similar-sounding parts?', a: 'Attribute-level scoring: a 5/16" bolt scores 0 on thread if the query wants 3/8".' },
-              { q: 'What happens when a buyer says "same as last time"?', a: 'Order-history lookup, not search — referential queries bypass the embedding pipeline.' },
-              { q: 'What if the query has no fastener attributes at all?', a: 'Return empty immediately. A specificity score of 0.0 means we understood nothing.' },
-              { q: 'How do I honor "no zinc"?', a: 'Negative constraints deduct 50 points — effectively disqualifying any match that violates them.' },
-            ].map(({ q, a }) => (
-              <div key={q} style={{
-                padding: '14px 18px', borderRadius: 10,
-                background: panelBg, border: `1px solid ${bd}`,
-              }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 5 }}>→ {q}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>{a}</div>
+              { gate: 'Early rejection', rule: 'specificity = 0.0 → return empty immediately', why: 'No attributes recognized means we understood nothing. An embedding similarity score on "a bolt" is meaningless. This also saves the API cost of the embedding call.', c: '#ef4444' },
+              { gate: 'LLM trigger',     rule: 'specificity < 0.17 → always call GPT-4o-mini', why: '0.17 means fewer than 1.5 attributes on average. The rubric scorer needs attribute matches to differentiate candidates — below this threshold, LLM judgment is more reliable than the rubric.', c: '#f59e0b' },
+              { gate: 'Confidence cap',  rule: 'cap = 0.58 + 0.37 × specificity', why: 'A vague query cannot produce a STRONG MATCH even if cosine similarity is 0.99. The cap enforces that confidence reflects understanding, not just text overlap.', c: '#10b981' },
+            ].map(r => (
+              <div key={r.gate} style={{ padding: '14px 18px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: r.c, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{r.gate}</span>
+                  <code style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--muted)', background: bgCode, padding: '1px 7px', borderRadius: 4 }}>{r.rule}</code>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.75 }}>{r.why}</div>
               </div>
             ))}
           </div>
@@ -289,175 +268,292 @@ export default function DesignPage({ dark }: { dark: boolean }) {
 
         {/* 03 */}
         <Section id="s03">
-          <SectionHead num="03" title="Edge Cases" color="#a78bfa" />
+          <SectionHead num="03" title="Two Retrievers" color="#a78bfa" />
           <Prose>
-            <p>Every system is defined by how it fails. I designed around five failure modes that would embarrass the product in a real procurement environment:</p>
+            <p>
+              I use two retrieval methods, but not because "hybrid retrieval" is best practice — because each one covers
+              a specific failure mode that the other can't handle.
+            </p>
           </Prose>
-          <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {[
-              { label: 'Referential queries',    detail: '"The same washers as last time" must look up order history, not keyword-search the catalog.', color: '#a78bfa' },
-              { label: 'Nonsensical queries',    detail: '"Buy me a sandwich" returns empty results, not garbage fasteners. Specificity gate catches this.', color: '#ef4444' },
-              { label: 'Negative constraints',   detail: '"No zinc" must filter, not penalize. A −50pt deduction effectively disqualifies any violating SKU.', color: '#f59e0b' },
-              { label: 'Near-duplicate catalog', detail: 'Some SKUs have near-identical descriptions. Deduplication at the result layer prevents showing the same part twice.', color: '#10b981' },
-              { label: 'Vague queries',          detail: '"A bolt" should produce honest low confidence, not a STRONG MATCH label on a random M6. Specificity caps enforce this.', color: '#06b6d4' },
-              { label: 'Metric/imperial clash',  detail: 'A buyer who always orders metric should be warned — not silently given an imperial part — when a query is ambiguous.', color: '#a78bfa' },
-            ].map(e => (
-              <div key={e.label} style={{
-                padding: '14px 16px', borderRadius: 9,
-                background: panelBg, border: `1px solid ${bd}`,
-              }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: e.color, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>{e.label}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.7 }}>{e.detail}</div>
+
+          <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div style={{ padding: '18px 20px', borderRadius: 11, background: bg, border: `1px solid rgba(16,185,129,0.2)` }}>
+              <div style={{ fontSize: 10, color: '#10b981', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>BM25 — exact vocabulary</div>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8, marginBottom: 12 }}>
+                Industrial abbreviations like <Chip label='"SHCS"' color="#10b981" />, <Chip label='"BHCS"' color="#10b981" />, <Chip label='"HHB"' color="#10b981" /> are
+                proprietary shorthand. General-purpose embeddings don't reliably map these to their full names.
+                BM25 matches them exactly — if the catalog entry contains "SHCS" and the query says "SHCS", BM25 scores it high.
+              </p>
+              <div style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
+                Without BM25: part-number queries like "7/16-14 SHCS" would rely entirely on semantic similarity, which is unreliable for proprietary codes.
               </div>
-            ))}
+            </div>
+
+            <div style={{ padding: '18px 20px', borderRadius: 11, background: bg, border: `1px solid rgba(167,139,250,0.2)` }}>
+              <div style={{ fontSize: 10, color: '#a78bfa', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>Cosine — paraphrase recall</div>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8, marginBottom: 12 }}>
+                A buyer who types <Chip label='"hex head cap screw"' color="#a78bfa" /> instead of <Chip label='"HHCS"' color="#a78bfa" /> gets
+                no BM25 benefit. The embedding model maps both phrases to similar vectors — semantic recall handles
+                natural-language variation that keyword search misses entirely.
+              </p>
+              <div style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
+                Without embeddings: descriptive queries like "flat head machine screw zinc plated" would fail on any catalog that uses abbreviations.
+              </div>
+            </div>
           </div>
+
+          <Prose>
+            <p style={{ marginTop: 20 }}>
+              The two lists are merged with Reciprocal Rank Fusion (k=60): each candidate's score is{' '}
+              <code style={{ fontFamily: 'var(--mono)', fontSize: 12, background: bgCode, padding: '1px 6px', borderRadius: 4, color: 'var(--text)' }}>Σ 1/(60 + rank)</code>.
+              I chose RRF over score-based fusion specifically because BM25 scores are integers and cosine scores
+              are 0–1 floats — combining them directly would require calibration that I'd have to re-tune on every
+              catalog update. RRF is rank-based, so the scale mismatch is irrelevant.
+            </p>
+          </Prose>
+
+          <InlineBox title="WHY NOT A VECTOR DATABASE?" color="#a78bfa" dark={dark}>
+            <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.75 }}>
+              At 955 SKUs, all embeddings fit in a NumPy array in memory (~6MB). A vector DB like Pinecone adds
+              network latency, operational complexity, and a monthly bill — in exchange for scaling to millions
+              of vectors that this catalog will never reach. The right tool for 955 rows is a numpy dot product.
+            </p>
+          </InlineBox>
         </Section>
 
         {/* 04 */}
         <Section id="s04">
-          <SectionHead num="04" title="Algorithm" color="#f59e0b" />
+          <SectionHead num="04" title={'Teaching "Match"'} color="#f59e0b" />
           <Prose>
-            <p>The retrieval pipeline has five sequential stages. Each stage was chosen to address a specific weakness of the previous one:</p>
+            <p>
+              After retrieval, the top-20 candidates go through a 100-point attribute rubric. The point values are not arbitrary — each one encodes a judgment about how much that attribute matters for procurement correctness.
+            </p>
           </Prose>
-          <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <PipelineStep num="1" color="#10b981"  label="Parse" sub="Regex + heuristics extract up to 8 typed attributes. Specificity score (0–1) computed. Score = 0 → early reject." />
-            <PipelineStep num="2" color="#06b6d4"  label="Embed" sub="OpenAI text-embedding-3-small converts the raw query string to a 1536-dim vector. Skipped on early reject." />
-            <PipelineStep num="3" color="#a78bfa"  label="Retrieve" sub="BM25 (keyword precision) + cosine similarity (semantic recall) each return top-20. Combined via RRF." />
-            <PipelineStep num="4" color="#f59e0b"  label="Score" sub="100-point attribute rubric applied to top-20 fused candidates. Family mismatch = hard reject." />
-            <PipelineStep num="5" color="#ef4444"  label="Rerank" sub="GPT-4o-mini reranks when top-2 gap < 10% or specificity < 0.17. Otherwise top-3 from scorer are returned directly." />
+
+          <div style={{ marginTop: 20, padding: '18px 22px', borderRadius: 11, background: bg, border: `1px solid ${bd}` }}>
+            <div style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 14 }}>ATTRIBUTE WEIGHTS</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { attr: 'Family', pts: 30, note: 'Hard filter — a hex bolt cannot substitute a socket head cap screw regardless of other matches', bar: '#10b981' },
+                { attr: 'Thread', pts: 25, note: 'Wrong thread diameter = physically incompatible. Second-most important structural constraint.', bar: '#06b6d4' },
+                { attr: 'Length', pts: 20, note: 'Structural requirement. A bolt that\'s too short won\'t work, too long may interfere.', bar: '#a78bfa' },
+                { attr: 'Material', pts: 10, note: 'Important but substitutable in some cases (alloy → stainless is usually acceptable).', bar: '#f59e0b' },
+                { attr: 'Finish', pts:  5, note: 'Cosmetic in most applications. Zinc vs. plain is buyer preference, not structural.', bar: '#f59e0b' },
+                { attr: 'Standard', pts: 5, note: 'DIN/ISO/ANSI designations rarely specified in buyer queries. Tiebreaker only.', bar: '#6b7a8d' },
+                { attr: 'Negatives', pts: -50, note: '"No zinc" or "not stainless" — 50-point penalty effectively disqualifies the match', bar: '#ef4444' },
+              ].map(r => (
+                <div key={r.attr} style={{ display: 'grid', gridTemplateColumns: '70px 46px 1fr', gap: 12, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{r.attr}</span>
+                  <span style={{ fontSize: 12, fontFamily: 'var(--mono)', color: r.pts < 0 ? '#ef4444' : r.bar, fontWeight: 700 }}>
+                    {r.pts > 0 ? `+${r.pts}` : r.pts}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>{r.note}</span>
+                </div>
+              ))}
+            </div>
           </div>
+
+          <Pull color="#f59e0b">
+            The −50 for negative constraints is deliberate. It's large enough to disqualify any match, but not infinite — so violating candidates still rank among themselves for debugging.
+          </Pull>
+
+          <Prose>
+            <p>
+              Each attribute also has a status beyond pass/fail:{' '}
+              <Chip label="exact" color="#10b981" />,{' '}
+              <Chip label="compatible" color="#06b6d4" />,{' '}
+              <Chip label="mismatch" color="#ef4444" />, or{' '}
+              <Chip label="not_in_catalog" color="#6b7a8d" />.
+              These show in the result card breakdown so a buyer can see exactly why a result was ranked first — not just a confidence number, but which attributes matched and which didn't.
+            </p>
+          </Prose>
         </Section>
 
         {/* 05 */}
         <Section id="s05">
-          <SectionHead num="05" title="Design Principles" color="#10b981" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 8 }}>
-            {[
-              { p: 'Specificity = honesty',     d: 'A confidence score must reflect how well the query was understood, not just how similar the text is. High cosine similarity on a vague query is not a strong match.', c: '#10b981' },
-              { p: 'Fail early, fail visibly',  d: 'Queries with no recognizable fastener attributes return empty results immediately. No results is better than wrong results in procurement.', c: '#06b6d4' },
-              { p: 'Every result needs a reason', d: 'The attribute breakdown panel shows exactly why a result ranked first — which attributes matched, which were compatible, which were missing. Buyers can challenge automated picks.', c: '#a78bfa' },
-              { p: 'Cost-aware by default',     d: 'LLM calls add latency and cost. The conditional reranking gate ensures AI judgment is applied only where rule-based scoring genuinely cannot differentiate.', c: '#f59e0b' },
-              { p: 'History is context',        d: 'A customer\'s past orders are the best signal for ambiguous queries. Personalization isn\'t a feature — it\'s the system knowing who it\'s talking to.', c: '#10b981' },
-            ].map(r => (
-              <div key={r.p} style={{
-                display: 'flex', gap: 16, alignItems: 'flex-start',
-                padding: '16px 18px', borderRadius: 10,
-                background: panelBg, border: `1px solid ${bd}`,
-              }}>
-                <div style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: r.c, flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 5 }}>{r.p}</div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.75 }}>{r.d}</div>
-                </div>
+          <SectionHead num="05" title="When to Ask GPT" color="#10b981" />
+          <Prose>
+            <p>
+              The LLM reranker fires on two specific conditions. I chose both thresholds by thinking about where
+              the rubric scorer genuinely fails — not just where it's "less accurate."
+            </p>
+          </Prose>
+
+          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ padding: '16px 20px', borderRadius: 10, background: bg, border: `1px solid rgba(16,185,129,0.2)` }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Condition A</span>
+                <code style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text)', background: bgCode, padding: '2px 8px', borderRadius: 4 }}>top-2 score gap &lt; 10%</code>
               </div>
-            ))}
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                When two candidates score within 10 points of each other, the rubric is genuinely uncertain — both parts
+                are structurally similar to what the buyer asked for. This is exactly the case where LLM judgment about
+                the query's real intent is more valuable than incrementally more rubric computation.
+              </p>
+            </div>
+
+            <div style={{ padding: '16px 20px', borderRadius: 10, background: bg, border: `1px solid rgba(245,158,11,0.2)` }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Condition B</span>
+                <code style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text)', background: bgCode, padding: '2px 8px', borderRadius: 4 }}>specificity &lt; 0.17</code>
+              </div>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                0.17 corresponds to roughly 1 attribute recognized. When the parser understood almost nothing, the
+                rubric scorer can't meaningfully differentiate candidates — they all have mostly-empty attribute
+                slots. The LLM, reading the raw query string directly, can often infer intent that the parser missed.
+              </p>
+            </div>
           </div>
+
+          <Prose>
+            <p style={{ marginTop: 20 }}>
+              These two conditions trigger on roughly 30% of queries. The other 70% return the rubric's top-3
+              directly — 800ms saved and ~$0.0015 saved per query. GPT-4o-mini writes a plain-English reason
+              string (<em>"M8 thread matches exactly; length is 48mm vs 50mm requested — close but not exact"</em>)
+              that surfaces in the result card so buyers know why the LLM picked what it picked.
+            </p>
+          </Prose>
         </Section>
 
         {/* 06 */}
         <Section id="s06">
-          <SectionHead num="06" title="Key Decisions" color="#06b6d4" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {DECISIONS.map((d, i) => (
-              <div key={i} className="design-card" style={{ padding: 20 }}>
-                <div style={{ fontSize: 9, color: d.color, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 6 }}>{d.tag}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>{d.title}</div>
-                <p style={{ fontSize: 12, color: '#7a8eaa', lineHeight: 1.75, marginBottom: 10 }}>{d.body}</p>
-                <div style={{ borderLeft: `2px solid ${d.color}40`, paddingLeft: 10, fontSize: 11.5, color: 'var(--muted)', fontStyle: 'italic', lineHeight: 1.65 }}>{d.why}</div>
-              </div>
-            ))}
+          <SectionHead num="06" title="History as Signal" color="#a78bfa" />
+          <Prose>
+            <p>
+              Repeat industrial buyers don't search in a vacuum. They have established suppliers, preferred materials,
+              and habitual specifications. Ignoring that context means making them re-specify things they've already told you.
+            </p>
+          </Prose>
+
+          <Pull color="#a78bfa">
+            Personalization in this system is not a ranking feature. It's a disambiguation layer for queries where the catalog can't tell the difference.
+          </Pull>
+
+          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <InlineBox title="REFERENTIAL QUERIES — BYPASS RETRIEVAL ENTIRELY" color="#a78bfa" dark={dark}>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                When a buyer types <Chip label='"the same washers as last time"' color="#a78bfa" />, there is no attribute to parse and no embedding
+                to compare. The correct answer is in their order history, not the catalog. These queries are
+                detected before the parser runs and resolved by looking up matching catalog descriptions in
+                the customer's recent orders. This path has no embedding cost and returns in under 10ms.
+              </p>
+            </InlineBox>
+
+            <InlineBox title="PREFERENCE BOOST — POST-SCORING, NOT PRE-FILTERING" color="#06b6d4" dark={dark}>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                Customer preference profiles (top materials, finishes, metric/imperial ratio) add a small score
+                boost <em>after</em> the rubric has already ranked candidates. This is intentional: personalization
+                should reinforce correct results, not override them. A customer who prefers zinc finish cannot
+                cause a wrong-family part to rank first — the rubric handles correctness, personalization
+                handles preference within correct results.
+              </p>
+            </InlineBox>
+
+            <InlineBox title="CONFLICT DETECTION — WARN, DON'T SUPPRESS" color="#f59e0b" dark={dark}>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                If a buyer who always orders metric submits a query that resolves to an imperial part, the system
+                surfaces a conflict warning rather than silently returning the result. Suppressing the result
+                would be paternalistic — the buyer might deliberately want an imperial part this time. Surfacing
+                the conflict respects their intent while preventing silent specification errors.
+              </p>
+            </InlineBox>
           </div>
         </Section>
 
         {/* 07 */}
         <Section id="s07">
-          <SectionHead num="07" title="Pipeline" color="#a78bfa" />
+          <SectionHead num="07" title="Honest Confidence" color="#f59e0b" />
           <Prose>
-            <p>End-to-end flow for a typical structured query like <span style={{ color: '#10b981', fontFamily: 'var(--mono)' }}>"M8 x 50mm BHCS alloy black oxide"</span>:</p>
+            <p>
+              The hardest problem in the UI layer is making confidence numbers mean something. Raw cosine similarity
+              between a vague query and a catalog entry can be 0.85 — which would normally imply a strong match.
+              But if the query only had one recognizable attribute, that 0.85 means almost nothing.
+            </p>
           </Prose>
-          <div style={{ marginTop: 22, padding: '20px 22px', borderRadius: 12, background: panelBg, border: `1px solid ${bd}`, fontFamily: 'var(--mono)', fontSize: 12, lineHeight: 2 }}>
-            {[
-              { step: 'PARSE',       out: 'family=button_socket  diameter=M8  length=50mm  material=alloy  finish=black_oxide', c: '#10b981' },
-              { step: 'SPECIFICITY', out: 'score=0.625  →  proceed to embedding', c: '#06b6d4' },
-              { step: 'EMBED',       out: 'query_vec = text-embedding-3-small(raw_query)  dim=1536', c: '#a78bfa' },
-              { step: 'BM25',        out: 'top-20 by keyword overlap  (SKU substrings, "BHCS" exact match)', c: '#f59e0b' },
-              { step: 'COSINE',      out: 'top-20 by embedding similarity  (semantic paraphrase recall)', c: '#06b6d4' },
-              { step: 'RRF(k=60)',   out: 'merge → 20 fused candidates', c: '#a78bfa' },
-              { step: 'SCORER',      out: 'family(30) + thread(25) + length(20) + material(10) + finish(5)  →  ranked top-3', c: '#f59e0b' },
-              { step: 'RERANK?',     out: 'gap=18%  specificity=0.625  →  skip LLM, return scorer top-3', c: '#10b981' },
-              { step: 'PERSONALIZE', out: 'customer prefers metric + alloy  →  +0.03 boost applied', c: '#06b6d4' },
-              { step: 'RESPOND',     out: 'results=3  confidence=[0.94, 0.71, 0.52]  time=143ms', c: '#10b981' },
-            ].map(({ step, out, c }) => (
-              <div key={step} style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
-                <span style={{ color: c, minWidth: 110, flexShrink: 0, fontWeight: 700 }}>{step}</span>
-                <span style={{ color: 'var(--muted)' }}>{out}</span>
-              </div>
-            ))}
+
+          <Formula dark={dark} />
+
+          <Prose>
+            <p style={{ marginTop: 20 }}>
+              The 0.58 floor means even a zero-specificity query can produce a result — but only at POSSIBLE confidence.
+              The 0.37 slope means a buyer who specifies 4 of 8 attributes can reach LIKELY but not STRONG.
+              Full STRONG MATCH confidence requires near-complete attribute coverage <em>and</em> high structural similarity.
+            </p>
+          </Prose>
+
+          <div style={{ marginTop: 20, padding: '16px 20px', borderRadius: 10, background: bg, border: `1px solid ${bd}` }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 12 }}>CONFIDENCE LABELS</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                { label: 'STRONG MATCH', range: '≥ 85%', note: 'High attribute coverage + high structural similarity. Buyer can proceed with confidence.', c: '#10b981' },
+                { label: 'LIKELY',       range: '≥ 65%', note: 'Most attributes match. Minor uncertainty — buyer should verify one or two specs.', c: '#06b6d4' },
+                { label: 'POSSIBLE',     range: '≥ 45%', note: 'Partial match. Could be correct but the query was underspecified. Flag for review.', c: '#f59e0b' },
+                { label: 'REVIEW',       range: '< 45%', note: 'Low confidence. Auto-logged to review queue for human inspection.', c: '#ef4444' },
+              ].map(r => (
+                <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '120px 54px 1fr', gap: 12, alignItems: 'baseline' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: r.c, fontFamily: 'var(--mono)' }}>{r.label}</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>{r.range}</span>
+                  <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>{r.note}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </Section>
 
         {/* 08 */}
         <Section id="s08">
-          <SectionHead num="08" title="How AI Was Used" color="#f59e0b" />
+          <SectionHead num="08" title="What I'd Build Next" color="#ef4444" />
           <Prose>
-            <p>The system uses AI in exactly two places — and deliberately not in the others.</p>
+            <p>
+              Honest limitations are more useful than polished claims. Here's what this system currently can't do
+              and what I'd prioritize with more time.
+            </p>
           </Prose>
-          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
             {[
-              { role: 'Semantic retrieval', model: 'text-embedding-3-small', detail: 'Converts the raw query string to a vector for cosine similarity against catalog embeddings. Enables paraphrase recall — "hex head cap screw" finds "SHCS" entries.', color: '#f59e0b', used: true },
-              { role: 'Ambiguity resolution', model: 'gpt-4o-mini', detail: 'Reranks the top-N candidates with a structured prompt when the score gap is too narrow or the query is too vague for the rubric to differentiate. Returns a plain-English reason string.', color: '#f59e0b', used: true },
-              { role: 'Query parsing', model: 'none — hand-coded', detail: 'The attribute parser is a deterministic regex + heuristic system. Using an LLM to parse would add 400ms and $0.001/query for a task where an exact-match rule is faster and more reliable.', color: 'var(--muted)', used: false },
-              { role: 'Catalog preprocessing', model: 'none — regex rules', detail: 'Catalog SKU descriptions are parsed offline into typed attributes before startup. This happens once, not at query time.', color: 'var(--muted)', used: false },
+              {
+                title: 'The parser misses non-standard abbreviations',
+                detail: 'The regex rules cover the most common industrial abbreviations, but not all of them. "FHS" (flat head screw), "PHM" (pan head machine screw), and regional variants aren\'t in the current rule set. A small training set of real queries would let me extend the parser significantly.',
+                next: 'Collect 200 real buyer queries and use them to extend the heuristic rules — no LLM needed for this.',
+                c: '#ef4444',
+              },
+              {
+                title: 'Personalization profiles thin out for new customers',
+                detail: 'Customers with fewer than ~10 orders get a "sparse" flag and receive no personalization boost. This is correct behavior — inferring preferences from 2 orders would introduce more noise than signal — but it means new customers don\'t benefit from the history layer.',
+                next: 'Category-level priors: if a customer orders mostly metric, default new metric customers to the metric-preferring prior until enough data accumulates.',
+                c: '#f59e0b',
+              },
+              {
+                title: 'The catalog preprocessing step requires a restart',
+                detail: 'Adding new SKUs to the catalog requires re-running the preprocessing pipeline and restarting the server. For a catalog that changes daily, this is too slow. For 955 SKUs that change monthly, it\'s fine — but it\'s a ceiling.',
+                next: 'Incremental embedding updates: write new catalog entries to disk and hot-reload the NumPy array without a full restart.',
+                c: '#a78bfa',
+              },
+              {
+                title: 'No multi-attribute disambiguation flow',
+                detail: 'When a query is genuinely ambiguous — "1/2 bolt" could be dozens of SKUs — the system returns its best guess with low confidence rather than asking a follow-up question. In a real product, a conversational clarification step ("Did you mean metric or imperial? Socket head or hex?") would reduce re-queries.',
+                next: 'A structured clarification prompt triggered when specificity < 0.25 and the review queue auto-logs the interaction for training data.',
+                c: '#06b6d4',
+              },
             ].map(r => (
-              <div key={r.role} style={{
-                padding: '14px 18px', borderRadius: 10,
-                background: panelBg, border: `1px solid ${bd}`,
-                display: 'flex', gap: 14, alignItems: 'flex-start',
-              }}>
-                <div style={{ width: 7, height: 7, borderRadius: '50%', background: r.used ? r.color : 'var(--muted)', marginTop: 5, flexShrink: 0 }} />
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 5 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{r.role}</span>
-                    <span style={{ fontSize: 10, fontFamily: 'var(--mono)', color: r.used ? r.color : 'var(--muted)', background: r.used ? `${r.color}15` : 'rgba(255,255,255,0.04)', padding: '1px 7px', borderRadius: 4, border: `1px solid ${r.used ? r.color + '30' : bd}` }}>{r.model}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.75 }}>{r.detail}</div>
+              <div key={r.title} style={{ padding: '18px 20px', borderRadius: 11, background: bg, border: `1px solid ${bd}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: r.c, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{r.title}</span>
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8, marginBottom: 12 }}>{r.detail}</p>
+                <div style={{ borderLeft: `2px solid ${r.c}40`, paddingLeft: 12, fontSize: 12, color: 'var(--muted)', fontStyle: 'italic', lineHeight: 1.65 }}>
+                  <span style={{ color: r.c, fontStyle: 'normal', fontWeight: 600 }}>Next step: </span>{r.next}
                 </div>
               </div>
             ))}
           </div>
-        </Section>
 
-        {/* 09 */}
-        <Section id="s09">
-          <SectionHead num="09" title="Tradeoffs" color="#ef4444" />
-          <Prose>
-            <p>Every design decision is also a decision to <em>not</em> do something else. Here's what was left out and why:</p>
-          </Prose>
-          <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[
-              { out: 'Vector database (Pinecone / Weaviate)', why: 'Overkill at 955 SKUs. All embeddings fit in memory as a NumPy array. A vector DB adds operational complexity with zero latency benefit at this scale.', c: '#ef4444' },
-              { out: 'Fine-tuned embeddings', why: 'Would require thousands of labeled query→SKU pairs we don\'t have. text-embedding-3-small\'s general semantic knowledge is sufficient — the attribute rubric handles the domain-specific precision.', c: '#f59e0b' },
-              { out: 'Always-on LLM reranking', why: 'Adds 800ms and ~$0.0015/query. The conditional gate achieves equivalent accuracy on 70% of queries using only the structured scorer.', c: '#a78bfa' },
-              { out: 'Real-time catalog updates', why: 'Catalog changes require a preprocessing step and server restart. For a 955-SKU catalog that changes infrequently, this is acceptable. At 100K+ SKUs, incremental indexing would be necessary.', c: '#06b6d4' },
-              { out: 'Multi-step query clarification', why: 'Asking "did you mean metric or imperial?" before returning results adds a round-trip. Instead, the system infers from customer history and flags conflicts post-hoc — faster, less friction.', c: '#10b981' },
-            ].map(r => (
-              <div key={r.out} style={{
-                padding: '14px 18px', borderRadius: 10,
-                background: panelBg, border: `1px solid ${bd}`,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, color: r.c, fontWeight: 700 }}>✕</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{r.out}</span>
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.75, paddingLeft: 18 }}>{r.why}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Footer eval note */}
-          <div style={{ marginTop: 32, padding: '16px 20px', background: panelBg, border: `1px solid ${bd}`, borderRadius: 12, fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>
+          {/* Eval note */}
+          <div style={{ marginTop: 32, padding: '16px 20px', background: bg, border: `1px solid ${bd}`, borderRadius: 12, fontSize: 12, color: 'var(--muted)', lineHeight: 1.85 }}>
             <span style={{ color: '#10b981', fontWeight: 600 }}>Eval methodology: </span>
-            33 queries across 6 categories (exact spec, vague, referential, nonsensical, edge case, cross-family) were run against the full pipeline. Results were graded as strong / likely / possible / no-match. The 96% strong-match rate reflects queries with at least one correctly identified fastener attribute — nonsensical queries return empty results by design.
+            33 hand-authored queries across 6 categories — exact spec, vague, referential, nonsensical, edge case (negatives + metric/imperial clash), and cross-family — were run against the full pipeline. Each result was graded strong / likely / possible / no-match by hand. 96% of queries with at least one recognized fastener attribute returned a strong-match top result. Nonsensical queries returned empty by design.
           </div>
         </Section>
 
