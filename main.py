@@ -241,6 +241,24 @@ def search(req: SearchRequest):
     )
 
 
+@app.get("/api/catalog")
+def get_catalog():
+    """Return all active catalog items with parsed attributes for the Catalog Explorer."""
+    return [
+        {
+            "sku":      item["sku"],
+            "desc":     item["description"],
+            "family":   item["parsed"].get("family"),
+            "material": item["parsed"].get("material"),
+            "finish":   item["parsed"].get("finish"),
+            "system":   item["parsed"].get("system"),
+            "diameter": item["parsed"].get("diameter_raw"),
+            "length":   item["parsed"].get("length_raw"),
+        }
+        for item in retrieval._catalog
+    ]
+
+
 @app.post("/api/review")
 def submit_review(req: ReviewRequest):
     """Manually flag a search result for human review."""

@@ -4,6 +4,8 @@ import CustomerSelector from './components/CustomerSelector'
 import CustomerProfile from './components/CustomerProfile'
 import ResultCard from './components/ResultCard'
 import DesignPage from './components/DesignPage'
+import ComparePage from './components/ComparePage'
+import CatalogExplorer from './components/CatalogExplorer'
 
 const EXAMPLE_QUERIES = [
   'SHCS 7/16 x 2-1/2', 'M8 flat washer', '5/16 hex nut', 'lock washer 5/8',
@@ -227,7 +229,8 @@ function EmptyState({ referential, hasCustomer }: { referential: boolean; hasCus
 
 export default function App() {
   const [dark, setDark]             = useState(() => localStorage.getItem('theme') !== 'light')
-  const [page, setPage]             = useState<'search' | 'design'>('search')
+  const [page, setPage]             = useState<'search' | 'design' | 'compare'>('search')
+  const [showCatalog, setShowCatalog] = useState(false)
   const [customers, setCustomers]   = useState<Customer[]>([])
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [query, setQuery]           = useState('')
@@ -301,7 +304,7 @@ export default function App() {
 
         {/* Page tabs */}
         <div style={{ display: 'flex', gap: 4 }}>
-          {(['search', 'design'] as const).map(p => (
+          {(['search', 'compare', 'design'] as const).map(p => (
             <button
               key={p}
               onClick={() => setPage(p)}
@@ -310,7 +313,7 @@ export default function App() {
                 textTransform: 'uppercase',
                 padding: '6px 16px', borderRadius: 7,
                 background: page === p ? 'rgba(16,185,129,0.1)' : 'none',
-                border: `1px solid ${page === p ? 'rgba(16,185,129,0.28)' : 'rgba(255,255,255,0.07)'}`,
+                border: `1px solid ${page === p ? 'rgba(16,185,129,0.28)' : dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.1)'}`,
                 color: page === p ? '#10b981' : 'var(--muted)',
                 transition: 'all 0.15s',
               }}
@@ -320,10 +323,20 @@ export default function App() {
           ))}
         </div>
 
-        {/* Right side: SKU count + theme toggle */}
+        {/* Right side: catalog + SKU count + theme toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => setShowCatalog(true)}
+            style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+              padding: '5px 13px', borderRadius: 7,
+              background: 'rgba(16,185,129,0.07)',
+              border: '1px solid rgba(16,185,129,0.2)',
+              color: '#10b981', transition: 'all 0.15s',
+            }}
+          >▦ CATALOG</button>
           <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
-            955 active SKUs
+            955 SKUs
           </div>
           <button
             onClick={() => setDark(d => !d)}
@@ -343,7 +356,10 @@ export default function App() {
       </div>
 
       {/* ── Design page ── */}
-      {page === 'design' && <DesignPage />}
+      {page === 'design' && <DesignPage dark={dark} />}
+
+      {/* ── Compare page ── */}
+      {page === 'compare' && <ComparePage customers={customers} dark={dark} />}
 
       {/* ── Search page ── */}
       {page === 'search' && <>
@@ -479,6 +495,9 @@ export default function App() {
       )}
 
       </> /* end search page */}
+
+      {/* ── Catalog Explorer modal ── */}
+      {showCatalog && <CatalogExplorer onClose={() => setShowCatalog(false)} dark={dark} />}
     </div>
   )
 }
