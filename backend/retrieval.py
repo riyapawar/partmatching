@@ -1,7 +1,11 @@
 """
 Hybrid retrieval: BM25 + cosine similarity fused with Reciprocal Rank Fusion.
 Returns top-N candidate catalog items for a query.
+
+Also exposes a three-tier part-number lookup (exact → normalized → fuzzy) that
+callers can run before the main pipeline for instant SKU-based returns.
 """
+import difflib
 import re
 from dataclasses import dataclass
 from typing import Optional
@@ -20,15 +24,88 @@ _embeddings: np.ndarray = np.empty((0,))
 _bm25: Optional[BM25Okapi] = None
 _embed_cache: dict[str, np.ndarray] = {}   # query text → normalised vector
 
+# Part-number lookup indexes
+_sku_index:      dict[str, dict] = {}        # SKU.upper()    → item
+_catid_index:    dict[str, dict] = {}        # CATALOG_ID.upper() → item
+_sku_norm_index: dict[str, dict] = {}        # _norm_sku(sku) → item (first wins)
+_sku_norm_pairs: list[tuple[str, dict]] = [] # [(norm_sku, item)] for fuzzy scan
+
+_SKU_NORM_RE  = re.compile(r'[^a-z0-9]')
+SKU_FUZZY_THRESHOLD = 0.82                   # SequenceMatcher ratio floor
+
+
+def _norm_sku(s: str) -> str:
+    """Strip non-alphanumeric characters and lowercase — used for all SKU comparisons."""
+    return _SKU_NORM_RE.sub('', s.lower())
+
 
 def init(catalog: list[dict], embeddings: np.ndarray) -> None:
     """Call once at startup with precomputed catalog + embeddings."""
     global _catalog, _embeddings, _bm25
+    global _sku_index, _catid_index, _sku_norm_index, _sku_norm_pairs
     _catalog    = catalog
     _embeddings = embeddings
     corpus      = [_tokenize(item["search_text"]) for item in catalog]
     _bm25       = BM25Okapi(corpus)
+
+    # Build part-number lookup indexes
+    _sku_index.clear()
+    _catid_index.clear()
+    _sku_norm_index.clear()
+    _sku_norm_pairs.clear()
+    for item in catalog:
+        sku   = item["sku"]
+        catid = item["catalog_id"]
+        _sku_index[sku.upper()] = item
+        _catid_index[catid.upper()] = item
+        norm = _norm_sku(sku)
+        if norm not in _sku_norm_index:
+            _sku_norm_index[norm] = item
+        _sku_norm_pairs.append((norm, item))
+
     print(f"[retrieval] BM25 index built over {len(catalog)} items.", flush=True)
+
+
+# ── Part-number lookup ────────────────────────────────────────────────────────
+
+def sku_lookup(query: str) -> list[dict]:
+    """
+    Three-tier part-number lookup that short-circuits the main pipeline.
+
+    Tier 1 — exact:      case-insensitive match on raw SKU or catalog ID.
+    Tier 2 — normalized: strip all non-alphanumeric chars, then match.
+    Tier 3 — fuzzy:      SequenceMatcher ratio ≥ SKU_FUZZY_THRESHOLD on normalized forms;
+                         returns up to 3 hits ordered by descending similarity.
+
+    Each hit: {"item": catalog_dict, "tier": str, "score": float}
+    Returns [] when no tier finds a match → caller should run the normal pipeline.
+    """
+    q = query.strip()
+    if not q:
+        return []
+
+    # Tier 1: exact (case-insensitive), covers both SKU and catalog ID
+    q_upper = q.upper()
+    if q_upper in _sku_index:
+        return [{"item": _sku_index[q_upper], "tier": "exact", "score": 1.0}]
+    if q_upper in _catid_index:
+        return [{"item": _catid_index[q_upper], "tier": "exact", "score": 1.0}]
+
+    # Tier 2: normalized (drop spaces, dashes, dots, etc.)
+    q_norm = _norm_sku(q)
+    if q_norm and q_norm in _sku_norm_index:
+        return [{"item": _sku_norm_index[q_norm], "tier": "normalized", "score": 0.97}]
+
+    # Tier 3: fuzzy — scan all normalized SKUs
+    if not q_norm:
+        return []
+    hits: list[dict] = []
+    for norm, item in _sku_norm_pairs:
+        ratio = difflib.SequenceMatcher(None, q_norm, norm).ratio()
+        if ratio >= SKU_FUZZY_THRESHOLD:
+            hits.append({"item": item, "tier": "fuzzy", "score": round(ratio, 3)})
+    hits.sort(key=lambda h: h["score"], reverse=True)
+    return hits[:3]
 
 
 # ── Public search API ─────────────────────────────────────────────────────────

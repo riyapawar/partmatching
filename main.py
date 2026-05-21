@@ -167,6 +167,17 @@ def search(req: SearchRequest):
                 search_time_ms = _ms(t0),
             )
 
+    # ── Part-number lookup (short-circuit before full pipeline) ──────────────
+    sku_hits = retrieval.sku_lookup(req.query)
+    if sku_hits:
+        tier = sku_hits[0]["tier"]
+        return SearchResponse(
+            results        = [_format_sku_hit(h) for h in sku_hits],
+            query_debug    = {"sku_lookup": tier, "matched": sku_hits[0]["item"]["sku"]},
+            search_time_ms = _ms(t0),
+            conflicts      = [],
+        )
+
     # ── Parse query ───────────────────────────────────────────────────────────
     query_parsed: ParsedAttributes = parse(req.query, expand_abbrevs=True)
 
@@ -583,6 +594,30 @@ def _orders_to_results(orders: list[dict]) -> list[dict]:
             "semantic_sim":          1.0,
         })
     return results[:3]
+
+
+def _format_sku_hit(hit: dict) -> dict:
+    """Format a sku_lookup hit into the standard result dict."""
+    item  = hit["item"]
+    tier  = hit["tier"]
+    score = hit["score"]
+    labels = {
+        "exact":      "Exact part number match",
+        "normalized": "Part number match",
+        "fuzzy":      "Close part number match",
+    }
+    return {
+        "catalog_id":            item["catalog_id"],
+        "sku":                   item["sku"],
+        "description":           item["description"],
+        "confidence":            score,
+        "confidence_label":      scorer.confidence_label(score),
+        "reason":                labels[tier],
+        "breakdown":             [],
+        "retrieval_tags":        [f"sku_{tier}"],
+        "personalization_fills": [],
+        "semantic_sim":          0.0,
+    }
 
 
 def _inject_fills(results: list[dict], scored: list) -> None:
