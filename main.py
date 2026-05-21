@@ -170,14 +170,18 @@ def search(req: SearchRequest):
     conflicts = detect_conflicts(query_parsed, profile)
 
     # Bail early if no fastener attributes were recognized at all.
-    # Avoids embedding cost and prevents nonsensical queries from returning results.
+    # Before giving up, try LLM extraction as a fallback for non-standard phrasing.
     if query_parsed.specificity == 0.0:
-        return SearchResponse(
-            results        = [],
-            query_debug    = _debug(query_parsed),
-            conflicts      = conflicts,
-            search_time_ms = _ms(t0),
-        )
+        llm_parsed = _llm_parse(req.query, _openai_client)
+        if llm_parsed and llm_parsed.specificity > 0.0:
+            query_parsed = llm_parsed
+        else:
+            return SearchResponse(
+                results        = [],
+                query_debug    = _debug(query_parsed),
+                conflicts      = conflicts,
+                search_time_ms = _ms(t0),
+            )
 
     # ── Embed query ───────────────────────────────────────────────────────────
     query_vec = retrieval.embed_query(req.query, _openai_client)
@@ -360,6 +364,95 @@ def get_review_queue():
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+_LLM_FAMILIES = [
+    "socket_head_cap_screw", "button_socket_cap_screw", "hex_cap_screw",
+    "hex_bolt", "heavy_hex_bolt", "tap_bolt", "lag_screw", "machine_screw",
+    "pan_head_machine_screw", "phillips_pan_machine_screw",
+    "hex_nut", "flat_washer", "lock_washer", "threaded_rod", "cap_screw",
+]
+
+_LLM_PARSE_PROMPT = f"""You are a fastener specification parser. Extract structured attributes from the query.
+Return ONLY valid JSON — no explanation, no markdown.
+
+Allowed values:
+  system:   "metric" | "imperial" | null
+  family:   one of {_LLM_FAMILIES} | null
+  diameter_raw: e.g. "M8", "3/8", "#8", "1/4" | null
+  thread_pitch: number — TPI for imperial, mm pitch for metric | null
+  length_raw: e.g. "30mm", "1-1/2", "6ft", "2" | null
+  material: "steel" | "stainless" | "alloy" | "brass" | "bronze" | null
+  finish:   "zinc" | "yellow_zinc" | "hdg" | "black_oxide" | "plain" | "mech_zinc" | null
+
+Return exactly this shape:
+{{"system":null,"family":null,"diameter_raw":null,"thread_pitch":null,"length_raw":null,"material":null,"finish":null}}"""
+
+
+def _llm_parse(query: str, client: OpenAI) -> Optional[ParsedAttributes]:
+    """GPT-4o-mini fallback parser for queries the regex couldn't parse."""
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _LLM_PARSE_PROMPT},
+                {"role": "user",   "content": f'Query: "{query}"'},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0,
+            max_tokens=150,
+        )
+        data = json.loads(resp.choices[0].message.content or "{}")
+    except Exception as e:
+        print(f"[llm_parse] Failed: {e}")
+        return None
+
+    p = ParsedAttributes()
+    p.system       = data.get("system")
+    p.family       = data.get("family") if data.get("family") in _LLM_FAMILIES else None
+    p.diameter_raw = data.get("diameter_raw")
+    p.thread_pitch = float(data["thread_pitch"]) if data.get("thread_pitch") is not None else None
+    p.length_raw   = data.get("length_raw")
+    p.material     = data.get("material") if data.get("material") in {"steel","stainless","alloy","brass","bronze"} else None
+    p.finish       = data.get("finish")   if data.get("finish")   in {"zinc","yellow_zinc","hdg","black_oxide","plain","mech_zinc"} else None
+
+    # Convert diameter_raw to diameter_in
+    raw_d = p.diameter_raw or ""
+    if raw_d.upper().startswith("M"):
+        try:    p.diameter_in = float(raw_d[1:]) / 25.4
+        except: pass
+    elif raw_d:
+        import re as _re
+        m = _re.match(r'^(\d+)/(\d+)$', raw_d)
+        if m: p.diameter_in = int(m.group(1)) / int(m.group(2))
+
+    # Convert length_raw to length_in
+    p.length_in = _parse_length_in(p.length_raw or "")
+
+    key_attrs = ["family", "diameter_in", "thread_pitch", "length_in", "material", "finish"]
+    p.specificity = sum(1 for a in key_attrs if getattr(p, a) is not None) / len(key_attrs)
+
+    print(f"[llm_parse] query='{query}' specificity={p.specificity:.2f} family={p.family}", flush=True)
+    return p
+
+
+def _parse_length_in(raw: str) -> Optional[float]:
+    """Convert a length_raw string to inches. Best-effort for LLM-parsed values."""
+    import re as _re
+    raw = raw.strip()
+    if not raw:
+        return None
+    m = _re.match(r'^(\d+(?:\.\d+)?)mm$', raw, _re.I)
+    if m: return float(m.group(1)) / 25.4
+    m = _re.match(r'^(\d+(?:\.\d+)?)ft?$', raw, _re.I)
+    if m: return float(m.group(1)) * 12.0
+    m = _re.match(r'^(\d+)-(\d+)/(\d+)$', raw)
+    if m: return int(m.group(1)) + int(m.group(2)) / int(m.group(3))
+    m = _re.match(r'^(\d+)/(\d+)$', raw)
+    if m: return int(m.group(1)) / int(m.group(2))
+    m = _re.match(r'^(\d+(?:\.\d+)?)"?$', raw)
+    if m: return float(m.group(1))
+    return None
+
 
 def _compute_demand_signals(order_file: Path) -> dict:
     """Read order_history.csv and compute per-SKU demand heat signals."""
