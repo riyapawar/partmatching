@@ -396,6 +396,14 @@ Allowed values:
   material: "steel" | "stainless" | "alloy" | "brass" | "bronze" | null
   finish:   "zinc" | "yellow_zinc" | "hdg" | "black_oxide" | "plain" | "mech_zinc" | null
 
+Semantic mappings to apply:
+  "corrosion resistant" | "rust proof" | "marine" → material: "stainless"
+  "outdoor" | "exterior" | "weatherproof" | "galvanized" → finish: "hdg"
+  "high strength" | "grade 8" | "strongest" → material: "alloy"
+  "decorative" | "black" → finish: "black_oxide"
+  "allen" | "hex socket" | "hex key" → family: "socket_head_cap_screw"
+  "phillips" | "pan head" → family: "phillips_pan_machine_screw"
+
 Return exactly this shape:
 {{"system":null,"family":null,"diameter_raw":null,"thread_pitch":null,"length_raw":null,"material":null,"finish":null}}"""
 

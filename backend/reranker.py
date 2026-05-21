@@ -20,7 +20,7 @@ from backend.scorer import ScoredCandidate
 
 GAP_THRESHOLD  = 0.10   # confidence gap below which LLM reranking fires
 SPEC_THRESHOLD = 0.17   # specificity below which LLM reranking fires
-RERANK_K       = 8      # how many candidates to send to LLM
+RERANK_K       = 4      # how many candidates to send to LLM
 
 SYSTEM_PROMPT = """You are an industrial fastener expert matching customer queries to catalog items.
 
@@ -43,7 +43,8 @@ Rules:
 - Return at most 3 results.
 - Be precise with confidence: if 73% certain output 0.73, not 0.70 or 0.75.
 - confidence ≥ 0.85 = near-perfect; 0.65–0.85 = strong; 0.45–0.65 = probable; < 0.45 = speculative.
-- The reason must explain WHY this item matches (not just restate the description)."""
+- The reason must explain WHY this item matches (not just restate the description).
+- STRICT: if structural constraints are provided (e.g. "required family: hex bolt"), items that do NOT match that family must rank below items that do. Never rank a non-matching family item above a matching one."""
 
 
 def should_rerank(scored: list[ScoredCandidate], query_specificity: float) -> bool:
