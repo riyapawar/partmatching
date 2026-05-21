@@ -71,8 +71,17 @@ def _load_catalog() -> list[dict]:
     with open(path, encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
     active = [r for r in rows if r.get("active", "").strip().upper() == "Y"]
-    print(f"[preprocess] {len(active)} active items (of {len(rows)} total)", flush=True)
-    return active
+    # Deduplicate by SKU — keep first occurrence
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for r in active:
+        if r["sku"] not in seen:
+            seen.add(r["sku"])
+            deduped.append(r)
+    if len(deduped) < len(active):
+        print(f"[preprocess] Deduplicated {len(active) - len(deduped)} duplicate SKUs.", flush=True)
+    print(f"[preprocess] {len(deduped)} active items (of {len(rows)} total)", flush=True)
+    return deduped
 
 
 def _enrich(catalog: list[dict]) -> list[dict]:
