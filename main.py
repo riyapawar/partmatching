@@ -194,7 +194,7 @@ def search(req: SearchRequest):
         return SearchResponse(
             results        = [],
             query_debug    = _debug(query_parsed),
-            conflicts      = conflicts,
+            conflicts      = [],
             search_time_ms = _ms(t0),
         )
 
@@ -270,7 +270,7 @@ def search(req: SearchRequest):
         results        = results,
         query_debug    = _debug(query_parsed),
         referential    = False,
-        conflicts      = conflicts,
+        conflicts      = [],
         search_time_ms = ms,
     )
 
