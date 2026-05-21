@@ -41,7 +41,7 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
   const [fMat, setMat]              = useState<string | null>(null)
   const [fFin, setFin]              = useState<string | null>(null)
   const [fSys, setSys]              = useState<string | null>(null)
-  const [demandFilter, setDemandF]  = useState<'all' | 'hot' | 'dead'>('all')
+  const [demandFilter, setDemandF]  = useState<'all' | 'dead'>('all')
 
   useEffect(() => {
     Promise.all([
@@ -73,7 +73,6 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
 
   const heatOrder: Record<string, number> = { hot: 0, warm: 1, cold: 2, dead: 3 }
 
-  const hotCount  = useMemo(() => items.filter(i => getHeat(i.sku) === 'hot').length,  [items, demand])
   const deadCount = useMemo(() => items.filter(i => getHeat(i.sku) === 'dead').length, [items, demand])
 
   const filtered = useMemo(() => {
@@ -88,7 +87,6 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
       }
       return true
     })
-    if (demandFilter === 'hot')  list = list.filter(i => getHeat(i.sku) === 'hot')
     if (demandFilter === 'dead') list = list.filter(i => getHeat(i.sku) === 'dead')
     list.sort((a, b) => heatOrder[getHeat(a.sku)] - heatOrder[getHeat(b.sku)])
     return list
@@ -133,7 +131,7 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
             <span style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>{items.length} parts</span>
             {!loading && (
               <div style={{ display: 'flex', gap: 4 }}>
-                {([['all', `ALL`, '#6b7a8d'], ['hot', `HOT ${hotCount}`, '#10b981'], ['dead', `NEVER ORDERED ${deadCount}`, '#ef4444']] as const).map(([f, label, col]) => (
+                {([['all', `ALL`, '#6b7a8d'], ['dead', `NEVER ORDERED ${deadCount}`, '#ef4444']] as const).map(([f, label, col]) => (
                   <button key={f} onClick={() => setDemandF(f === demandFilter ? 'all' : f)} style={{
                     fontSize: 10, padding: '3px 10px', borderRadius: 5, cursor: 'pointer', fontWeight: 700,
                     background: demandFilter === f ? `${col}18` : 'transparent',
