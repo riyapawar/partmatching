@@ -42,6 +42,7 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
   const [fFin, setFin]              = useState<string | null>(null)
   const [fSys, setSys]              = useState<string | null>(null)
   const [demandFilter, setDemandF]  = useState<'all' | 'dead'>('all')
+  const [visibleCount, setVisible]  = useState(50)
 
   useEffect(() => {
     Promise.all([
@@ -74,6 +75,9 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
   const heatOrder: Record<string, number> = { hot: 0, warm: 1, cold: 2, dead: 3 }
 
   const deadCount = useMemo(() => items.filter(i => getHeat(i.sku) === 'dead').length, [items, demand])
+
+  // Reset pagination when filters change
+  useEffect(() => { setVisible(50) }, [fFam, fMat, fFin, fSys, search, demandFilter])
 
   const filtered = useMemo(() => {
     let list = items.filter(i => {
@@ -214,7 +218,7 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
               {/* Legend + count bar */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
-                  {filtered.length} parts · sorted by demand
+                  {Math.min(visibleCount, filtered.length)} of {filtered.length} · sorted by demand
                 </span>
                 <div style={{ display: 'flex', gap: 14, fontSize: 10, color: 'var(--muted)' }}>
                   {(['hot', 'warm', 'cold', 'dead'] as const).map(h => (
@@ -227,7 +231,7 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {filtered.map(item => {
+                {filtered.slice(0, visibleCount).map(item => {
                   const h       = getHeat(item.sku)
                   const hColor  = HEAT_COLOR[h]
                   const dem     = demand[item.sku]
@@ -311,6 +315,24 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
                   )
                 })}
               </div>
+
+              {visibleCount < filtered.length && (
+                <button
+                  onClick={() => setVisible(v => v + 50)}
+                  style={{
+                    width: '100%', marginTop: 10, padding: '10px 0',
+                    borderRadius: 7, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                    background: 'transparent',
+                    border: `1px solid ${bd}`,
+                    color: 'var(--muted)',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text)'; (e.currentTarget as HTMLElement).style.borderColor = '#10b981' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--muted)'; (e.currentTarget as HTMLElement).style.borderColor = bd }}
+                >
+                  load 50 more · {filtered.length - visibleCount} remaining
+                </button>
+              )}
             </div>
           </div>
         )}
