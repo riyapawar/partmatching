@@ -207,7 +207,10 @@ def search(req: SearchRequest):
 
     # ── Personalization ───────────────────────────────────────────────────────
     for s in scored:
-        pers = personalization.personalize(query_parsed, s.candidate.parsed, profile)
+        pers = personalization.personalize(
+            query_parsed, s.candidate.parsed, profile,
+            candidate_sku=s.candidate.sku,
+        )
         s.confidence = min(1.0, round(s.confidence + pers.boost, 4))
         s.candidate._pers_fills = pers.fills  # type: ignore[attr-defined]
 
