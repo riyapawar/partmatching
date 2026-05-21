@@ -92,7 +92,20 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
       return true
     })
     if (demandFilter === 'dead') list = list.filter(i => getHeat(i.sku) === 'dead')
-    list.sort((a, b) => heatOrder[getHeat(a.sku)] - heatOrder[getHeat(b.sku)])
+
+    if (search) {
+      const q = search.toLowerCase()
+      const relevance = (i: CatalogItem) => {
+        if (i.sku.toLowerCase() === q)              return 0  // exact SKU
+        if (i.sku.toLowerCase().startsWith(q))      return 1  // SKU prefix
+        if (i.sku.toLowerCase().includes(q))        return 2  // SKU contains
+        if (i.desc.toLowerCase().startsWith(q))     return 3  // desc prefix
+        return 4                                              // desc contains
+      }
+      list.sort((a, b) => relevance(a) - relevance(b) || heatOrder[getHeat(a.sku)] - heatOrder[getHeat(b.sku)])
+    } else {
+      list.sort((a, b) => heatOrder[getHeat(a.sku)] - heatOrder[getHeat(b.sku)])
+    }
     return list
   }, [items, fFam, fMat, fFin, fSys, search, demandFilter, demand])
 
