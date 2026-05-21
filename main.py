@@ -44,7 +44,7 @@ _demand_signals: dict = {}          # sku → {orders, customers, last_date, hea
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _openai_client, _customer_profiles
+    global _openai_client, _customer_profiles, _demand_signals
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
