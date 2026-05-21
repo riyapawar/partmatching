@@ -143,40 +143,43 @@ def personalize(
     inferred: dict[str, str]   = {}
 
     # ── Family ───────────────────────────────────────────────────────────────
-    cf = candidate_parsed.get("family")
-    if cf and cf in profile.family_affinity:
-        affinity = profile.family_affinity[cf]
-        boost += affinity * 0.08
-        inferred["family"] = cf
-        label = "inferred from" if query.family is None else "aligns with"
-        fills.append(
-            f"product family '{cf.replace('_',' ')}' {label} your order history "
-            f"({profile.total_orders} orders, {affinity:.0%} preference)"
-        )
+    if query.family is None:
+        cf = candidate_parsed.get("family")
+        if cf and cf in profile.family_affinity:
+            affinity = profile.family_affinity[cf]
+            b = affinity * 0.08
+            boost += b
+            inferred["family"] = cf
+            fills.append(
+                f"product family '{cf.replace('_',' ')}' inferred from your order history "
+                f"({profile.total_orders} orders, {affinity:.0%} preference)"
+            )
 
     # ── Material ─────────────────────────────────────────────────────────────
-    cm = candidate_parsed.get("material")
-    if cm and cm in profile.material_affinity:
-        affinity = profile.material_affinity[cm]
-        boost += affinity * 0.06
-        inferred["material"] = cm
-        label = "inferred from" if query.material is None else "aligns with"
-        fills.append(
-            f"material '{cm}' {label} your order history "
-            f"({affinity:.0%} of past orders)"
-        )
+    if query.material is None:
+        cm = candidate_parsed.get("material")
+        if cm and cm in profile.material_affinity:
+            affinity = profile.material_affinity[cm]
+            b = affinity * 0.06
+            boost += b
+            inferred["material"] = cm
+            fills.append(
+                f"material '{cm}' inferred from your order history "
+                f"({affinity:.0%} of past orders)"
+            )
 
     # ── Finish ────────────────────────────────────────────────────────────────
-    cf = candidate_parsed.get("finish")
-    if cf and cf in profile.finish_affinity:
-        affinity = profile.finish_affinity[cf]
-        boost += affinity * 0.04
-        inferred["finish"] = cf
-        label = "inferred from" if query.finish is None else "aligns with"
-        fills.append(
-            f"finish '{cf.replace('_',' ')}' {label} your order history "
-            f"({affinity:.0%} of past orders)"
-        )
+    if query.finish is None:
+        cf = candidate_parsed.get("finish")
+        if cf and cf in profile.finish_affinity:
+            affinity = profile.finish_affinity[cf]
+            b = affinity * 0.04
+            boost += b
+            inferred["finish"] = cf
+            fills.append(
+                f"finish '{cf.replace('_',' ')}' inferred from your order history "
+                f"({affinity:.0%} of past orders)"
+            )
 
     # ── Repeat SKU bonus ──────────────────────────────────────────────────────
     if candidate_sku and candidate_sku in profile.recent_skus:
