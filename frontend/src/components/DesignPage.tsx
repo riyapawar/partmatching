@@ -115,7 +115,7 @@ export default function DesignPage({ dark }: { dark: boolean }) {
           {[
             { v: '96%',       l: 'strong-match rate',  c: '#10b981' },
             { v: '955',       l: 'active SKUs',         c: '#06b6d4' },
-            { v: '<250ms',    l: 'p95 latency',         c: '#a78bfa' },
+            { v: '~300ms',    l: 'p95 (no-LLM path)',   c: '#a78bfa' },
             { v: '~$0.001',   l: 'avg cost per query',  c: '#f59e0b' },
           ].map(m => (
             <div key={m.l} style={{ padding: '9px 12px', borderRadius: 8, background: bg, border: `1px solid ${bd}` }}>
@@ -225,14 +225,16 @@ export default function DesignPage({ dark }: { dark: boolean }) {
           </Prose>
 
           <Pull color="#06b6d4">
-            I did not use an LLM for parsing. An LLM call adds 400ms and costs $0.001 per query for a task
-            where a deterministic rule is faster, cheaper, and more reliable.
+            The parser is deterministic by default — zero API calls on the happy path. The exception is
+            when the regex extracts nothing (specificity = 0.0): a single GPT-4o-mini call then attempts
+            structured extraction using semantic mappings before giving up. This handles queries like
+            "corrosion resistant outdoor fastener" that regex cannot parse.
           </Pull>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <Q bg={bg} bd={bd}
               q="What can't the parser handle?"
-              a="Non-standard regional abbreviations and supplier-specific codes not in the lookup table. If a buyer uses an internal shorthand like 'FHS-32' that doesn't map to a known family, the parser will miss the family slot. This is the most common source of parser misses and the first thing I would extend with real query data."
+              a="Non-standard regional abbreviations and supplier-specific codes not in the lookup table. If a buyer uses an internal shorthand like 'FHS-32' that doesn't map to a known family, the parser will miss the family slot. When the parser fills zero slots (specificity = 0.0), a GPT-4o-mini fallback fires before rejecting, using semantic mappings to attempt extraction. Natural-language descriptions like 'corrosion resistant outdoor fastener' route through this path. Anything still unresolved returns empty."
             />
             <Q bg={bg} bd={bd}
               q="What about typos and misspellings?"
@@ -265,7 +267,7 @@ export default function DesignPage({ dark }: { dark: boolean }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
             {[
-              { gate: 'Early rejection',  rule: 'specificity = 0.0  return empty immediately', why: 'If no attributes were recognized, we understood nothing. Embedding a zero-information query and comparing it against 955 descriptions produces a meaningless similarity ranking. Returning empty is more honest and saves the embedding API call (~$0.0001 per call).', c: '#ef4444' },
+              { gate: 'LLM parse fallback',  rule: 'specificity = 0.0 → GPT-4o-mini extraction attempt', why: 'When the regex fills zero slots, a GPT-4o-mini call attempts structured extraction with semantic mappings (e.g. "corrosion resistant" → stainless, "outdoor" → HDG finish) before the query is rejected. The LLM receives a closed list of allowed values per attribute and cannot invent values outside it. If extraction yields at least one slot, search proceeds normally. If it still produces nothing, the query returns empty.', c: '#ef4444' },
               { gate: 'LLM trigger',      rule: 'specificity < 0.17  always call GPT-4o-mini', why: '0.17 corresponds to fewer than 1.5 attributes recognized. The attribute rubric needs filled slots to differentiate candidates. Below this threshold the rubric cannot meaningfully rank; the LLM reading the raw query string directly performs better.', c: '#f59e0b' },
               { gate: 'Confidence cap',   rule: 'cap = 0.58 + 0.37 x specificity', why: 'A vague query cannot earn a STRONG MATCH label even if its embedding cosine similarity is 0.99. The cap ensures confidence reflects how well we understood the query, not just how similar the text looked.', c: '#10b981' },
             ].map(r => (
@@ -406,10 +408,17 @@ export default function DesignPage({ dark }: { dark: boolean }) {
           <SectionHead num="06" title="When to Call the LLM" color="#10b981" />
           <Prose>
             <p>
-              GPT-4o-mini is called as a reranker on a conditional basis. It is not called on every query.
-              Always-on LLM reranking would add 700 to 900 milliseconds and about $0.0015 per query.
-              For the 70% of queries where the attribute rubric produces a clear winner, that cost and latency
-              buys nothing. The gate limits LLM calls to the cases where they actually add value.
+              GPT-4o-mini is used in two distinct places in the pipeline. The first is a parse fallback
+              (section 02 and 03): triggered only when regex specificity = 0.0, before the query is rejected.
+              The second is the conditional reranker described here. They never overlap — the parse fallback
+              fires before retrieval; the reranker fires after scoring. A single query never triggers both.
+            </p>
+            <br />
+            <p>
+              The reranker is not called on every query. Always-on LLM reranking would add 300 to 500
+              milliseconds and about $0.0015 per query. For the 65 to 75% of queries where the attribute
+              rubric produces a clear winner, that cost and latency buys nothing. The gate limits reranker
+              calls to the cases where they actually add value.
             </p>
           </Prose>
 
@@ -439,6 +448,21 @@ export default function DesignPage({ dark }: { dark: boolean }) {
                 particularly for informal or descriptive queries.
               </p>
             </div>
+
+            <div style={{ padding: '16px 20px', borderRadius: 10, background: bg, border: '1px solid rgba(6,182,212,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Structural guard</span>
+                <code style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text)', background: bgCode, padding: '2px 8px', borderRadius: 4 }}>parsed family / material / system → injected as constraints</code>
+              </div>
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.8 }}>
+                When the parser identified a family, material, or measurement system, those facts are injected
+                into the reranker prompt as hard constraints: e.g. "required family: socket head cap screw."
+                The reranker system prompt includes a STRICT rule — items that do not match the stated family
+                must rank below items that do. This prevents the LLM from elevating a tap bolt above a socket
+                head cap screw when the buyer explicitly requested the latter. The LLM can reorder within the
+                same family; it cannot override the family itself.
+              </p>
+            </div>
           </div>
 
           <Prose>
@@ -454,7 +478,7 @@ export default function DesignPage({ dark }: { dark: boolean }) {
           <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
             <Q bg={bg} bd={bd}
               q="Why GPT-4o-mini and not a more powerful model?"
-              a="GPT-4o-mini is sufficient for this reranking task. The prompt is short, the candidates are already pre-filtered to top-20, and the task is comparison rather than generation. GPT-4o would add cost and negligible accuracy improvement on structured comparison tasks at this size. GPT-4o-mini runs in 700 to 900ms; GPT-4o runs in 2 to 4 seconds."
+              a="GPT-4o-mini is sufficient for this reranking task. The reranker sends only the top 4 candidates (RERANK_K=4) — a short, focused prompt where the task is comparison rather than generation. GPT-4o would add cost and negligible accuracy improvement at this scale. GPT-4o-mini with 4 candidates runs in 300 to 500ms; GPT-4o runs in 2 to 4 seconds."
             />
             <Q bg={bg} bd={bd}
               q="What does the LLM actually cost in production?"
@@ -714,6 +738,15 @@ export default function DesignPage({ dark }: { dark: boolean }) {
               more data, or a production deployment context.
             </p>
           </Prose>
+
+          <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 8, background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', fontSize: 12, color: 'var(--muted)', lineHeight: 1.8 }}>
+            <span style={{ color: '#10b981', fontWeight: 600 }}>Already shipped beyond core search: </span>
+            Demand intelligence (90-day heat tiers, never-ordered filter) and a substitution finder
+            live in the Catalog tab. Heat tiers are computed from order_history.csv at startup — hot (last 90d),
+            warm (90–180d), cold (180d+), dead (never ordered). Clicking any SKU fetches compatible
+            alternatives via the FAMILY_COMPAT and MATERIAL_COMPAT rules from the abbreviation module.
+            Both features run at zero additional API cost.
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 8 }}>
             {[
