@@ -214,7 +214,7 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
               {/* Legend + count bar */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
-                  {Math.min(50, filtered.length)} of {filtered.length} · capped at 50 · sorted by demand
+                  {filtered.length} parts · sorted by demand
                 </span>
                 <div style={{ display: 'flex', gap: 14, fontSize: 10, color: 'var(--muted)' }}>
                   {(['hot', 'warm', 'cold', 'dead'] as const).map(h => (
@@ -227,7 +227,7 @@ export default function CatalogExplorer({ onClose, dark }: { onClose: () => void
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {filtered.slice(0, 50).map(item => {
+                {filtered.map(item => {
                   const h       = getHeat(item.sku)
                   const hColor  = HEAT_COLOR[h]
                   const dem     = demand[item.sku]

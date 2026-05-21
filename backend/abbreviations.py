@@ -7,16 +7,20 @@ import re
 # Maps abbreviation (uppercase) → expansion (lowercase)
 _RAW: dict[str, str] = {
     # ── Query shorthands ──────────────────────────────────────────────────────
-    "SHCS":    "socket head cap screw",
-    "BHCS":    "button socket cap screw",
-    "BHSC":    "button socket cap screw",
-    "HHB":     "heavy hex bolt",
-    "HHN":     "heavy hex nut",
-    "HCS":     "hex cap screw",
-    "FHCS":    "flat head cap screw",
-    "PHMS":    "pan head machine screw",
-    "RHMS":    "round head machine screw",
-    "FSCS":    "flat socket cap screw",
+    "SHCS":         "socket head cap screw",
+    "BHCS":         "button socket cap screw",
+    "BHSC":         "button socket cap screw",
+    "HHB":          "heavy hex bolt",
+    "HHN":          "heavy hex nut",
+    "HCS":          "hex cap screw",
+    "FHCS":         "flat head cap screw",
+    "PHMS":         "pan head machine screw",
+    "RHMS":         "round head machine screw",
+    "FSCS":         "flat socket cap screw",
+    "ALLEN BOLT":   "socket head cap screw",
+    "ALLEN SCREW":  "socket head cap screw",
+    "ALLEN":        "socket head cap screw",
+    "HEX SOCKET":   "socket head cap screw",
 
     # ── Catalog description tokens ────────────────────────────────────────────
     "HX HD LAG SCR":          "hex head lag screw",

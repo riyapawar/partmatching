@@ -216,6 +216,18 @@ def search(req: SearchRequest):
     # ── Conditional LLM reranking ─────────────────────────────────────────────
     history_ctx = _history_context(profile) if profile else None
 
+    # Surface parsed constraints to the reranker so it can't override known family/material
+    parse_hints: list[str] = []
+    if query_parsed.family:
+        parse_hints.append(f"required family: {query_parsed.family.replace('_', ' ')}")
+    if query_parsed.material:
+        parse_hints.append(f"required material: {query_parsed.material}")
+    if query_parsed.system:
+        parse_hints.append(f"required system: {query_parsed.system}")
+    if parse_hints:
+        hints_str  = "Structural constraints: " + "; ".join(parse_hints) + "."
+        history_ctx = f"{history_ctx}\n{hints_str}" if history_ctx else hints_str
+
     if reranker.should_rerank(scored, query_parsed.specificity):
         results = reranker.rerank(
             query       = req.query,
