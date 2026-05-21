@@ -134,18 +134,20 @@ function SpecTree({ debug }: { debug: QueryDebug }) {
 // ── Customer panel (right column) ────────────────────────────────────────────
 
 function CustomerPanel({
-  customers, customerId, onSelect, loading, selectedCustomer,
+  customers, customerId, onSelect, loading, selectedCustomer, dark,
 }: {
   customers: Customer[]
   customerId: string | null
   onSelect: (id: string | null) => void
   loading: boolean
   selectedCustomer: Customer | null
+  dark: boolean
 }) {
   return (
     <div style={{
-      background: 'rgba(0,0,0,0.25)',
-      border: '1px solid rgba(255,255,255,0.07)',
+      background: dark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.88)',
+      border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.09)'}`,
+      boxShadow: dark ? 'none' : '0 2px 10px rgba(0,0,0,0.06)',
       borderRadius: 10, padding: 16, height: '100%',
     }}>
       <CustomerSelector customers={customers} selected={customerId} onSelect={onSelect} disabled={loading} />
@@ -153,11 +155,11 @@ function CustomerPanel({
         ? <CustomerProfile customer={selectedCustomer} />
         : (
           <div style={{ marginTop: 32, textAlign: 'center' }}>
-            <div style={{ fontSize: 28, marginBottom: 10, color: '#2a3a4a' }}>◌</div>
+            <div style={{ fontSize: 28, marginBottom: 10, color: 'var(--muted)', opacity: 0.4 }}>◌</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
               No customer selected
             </div>
-            <div style={{ fontSize: 11, color: '#2a3a4a', marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', opacity: 0.6, marginTop: 4 }}>
               Pick one to personalize results
             </div>
           </div>
@@ -224,6 +226,7 @@ function EmptyState({ referential, hasCustomer }: { referential: boolean; hasCus
 // ── Main app ─────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [dark, setDark]             = useState(() => localStorage.getItem('theme') !== 'light')
   const [page, setPage]             = useState<'search' | 'design'>('search')
   const [customers, setCustomers]   = useState<Customer[]>([])
   const [customerId, setCustomerId] = useState<string | null>(null)
@@ -231,6 +234,11 @@ export default function App() {
   const [loading, setLoading]       = useState(false)
   const [response, setResponse]     = useState<SearchResponse | null>(null)
   const [error, setError]           = useState<string | null>(null)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+    localStorage.setItem('theme', dark ? 'dark' : 'light')
+  }, [dark])
 
   const selectedCustomer = customers.find(c => c.customer_id === customerId) ?? null
 
@@ -312,9 +320,25 @@ export default function App() {
           ))}
         </div>
 
-        {/* SKU count */}
-        <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
-          955 active SKUs
+        {/* Right side: SKU count + theme toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
+            955 active SKUs
+          </div>
+          <button
+            onClick={() => setDark(d => !d)}
+            title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              background: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)',
+              border: `1px solid ${dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}`,
+              color: dark ? '#f59e0b' : '#6b7a8d',
+              fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.2s',
+            }}
+          >
+            {dark ? '☀' : '☾'}
+          </button>
         </div>
       </div>
 
@@ -327,9 +351,10 @@ export default function App() {
       {/* ── Search bar ── */}
       <div style={{
         display: 'flex', gap: 10, marginBottom: 20,
-        background: 'rgba(11,17,35,0.82)',
+        background: dark ? 'rgba(11,17,35,0.82)' : 'rgba(255,255,255,0.97)',
         backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'}`,
+        boxShadow: dark ? 'none' : '0 2px 16px rgba(0,0,0,0.07)',
         borderRadius: 10, padding: '6px 6px 6px 16px',
       }}>
         <span style={{ color: 'var(--muted)', alignSelf: 'center', fontSize: 15 }}>🔍</span>
@@ -389,7 +414,12 @@ export default function App() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, marginBottom: 20 }}>
 
           {/* Left: spec panel */}
-          <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: 20 }}>
+          <div style={{
+            background: dark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.88)',
+            border: `1px solid ${dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.09)'}`,
+            boxShadow: dark ? 'none' : '0 2px 10px rgba(0,0,0,0.06)',
+            borderRadius: 10, padding: 20,
+          }}>
             {loading ? (
               <div className="skeleton" style={{ height: 180, borderRadius: 8 }} />
             ) : response ? (
@@ -404,6 +434,7 @@ export default function App() {
             onSelect={setCustomerId}
             loading={loading}
             selectedCustomer={selectedCustomer}
+            dark={dark}
           />
         </div>
       )}
