@@ -141,43 +141,67 @@ def personalize(
     inferred: dict[str, str]   = {}
 
     # ── Family ───────────────────────────────────────────────────────────────
-    if query.family is None:
-        cf = candidate_parsed.get("family")
-        if cf and cf in profile.family_affinity:
-            affinity = profile.family_affinity[cf]
+    cf = candidate_parsed.get("family")
+    if cf and cf in profile.family_affinity:
+        affinity = profile.family_affinity[cf]
+        if query.family is None:
             b = affinity * _BOOST_FAMILY
-            boost += b
-            inferred["family"] = cf
             fills.append(
                 f"product family '{cf.replace('_',' ')}' inferred from your order history "
                 f"({profile.total_orders} orders, {affinity:.0%} preference)"
             )
+        elif query.family == cf:
+            b = affinity * _BOOST_FAMILY * 0.5   # confirmation: half-strength
+            fills.append(
+                f"family '{cf.replace('_',' ')}' confirmed by your order history "
+                f"({affinity:.0%} preference)"
+            )
+        else:
+            b = 0.0
+        boost += b
+        inferred["family"] = cf
 
     # ── Material ─────────────────────────────────────────────────────────────
-    if query.material is None:
-        cm = candidate_parsed.get("material")
-        if cm and cm in profile.material_affinity:
-            affinity = profile.material_affinity[cm]
+    cm = candidate_parsed.get("material")
+    if cm and cm in profile.material_affinity:
+        affinity = profile.material_affinity[cm]
+        if query.material is None:
             b = affinity * _BOOST_MATERIAL
-            boost += b
-            inferred["material"] = cm
             fills.append(
                 f"material '{cm}' inferred from your order history "
                 f"({affinity:.0%} of past orders)"
             )
+        elif query.material == cm:
+            b = affinity * _BOOST_MATERIAL * 0.5   # confirmation: half-strength
+            fills.append(
+                f"material '{cm}' confirmed by your order history "
+                f"({affinity:.0%} of past orders)"
+            )
+        else:
+            b = 0.0
+        boost += b
+        inferred["material"] = cm
 
     # ── Finish ────────────────────────────────────────────────────────────────
-    if query.finish is None:
-        cf = candidate_parsed.get("finish")
-        if cf and cf in profile.finish_affinity:
-            affinity = profile.finish_affinity[cf]
+    cf = candidate_parsed.get("finish")
+    if cf and cf in profile.finish_affinity:
+        affinity = profile.finish_affinity[cf]
+        if query.finish is None:
             b = affinity * _BOOST_FINISH
-            boost += b
-            inferred["finish"] = cf
             fills.append(
                 f"finish '{cf.replace('_',' ')}' inferred from your order history "
                 f"({affinity:.0%} of past orders)"
             )
+        elif query.finish == cf:
+            b = affinity * _BOOST_FINISH * 0.5   # confirmation: half-strength
+            fills.append(
+                f"finish '{cf.replace('_', ' ')}' confirmed by your order history "
+                f"({affinity:.0%} of past orders)"
+            )
+        else:
+            b = 0.0
+        boost += b
+        inferred["finish"] = cf
 
     # ── Repeat SKU bonus ──────────────────────────────────────────────────────
     sku = candidate_parsed.get("sku", "")
