@@ -243,10 +243,10 @@ def _compute_confidence(
 
 
 def confidence_label(confidence: float) -> str:
-    if confidence >= 0.85:
+    if confidence >= 0.70:
         return "strong"
-    if confidence >= 0.65:
-        return "likely"
     if confidence >= 0.45:
+        return "likely"
+    if confidence >= 0.25:
         return "possible"
     return "weak"

@@ -18,8 +18,8 @@ from openai import OpenAI
 
 from backend.scorer import ScoredCandidate
 
-GAP_THRESHOLD  = 0.03   # confidence gap below which LLM reranking fires
-SPEC_THRESHOLD = 0.0    # disabled — specificity alone no longer triggers reranking
+GAP_THRESHOLD  = 0.10   # confidence gap below which LLM reranking fires
+SPEC_THRESHOLD = 0.17   # specificity below which LLM reranking fires
 RERANK_K       = 4      # how many candidates to send to LLM
 
 SYSTEM_PROMPT = """You are an industrial fastener expert matching customer queries to catalog items.
@@ -47,13 +47,12 @@ Rules:
 - STRICT: if structural constraints are provided (e.g. "required family: hex bolt"), items that do NOT match that family must rank below items that do. Never rank a non-matching family item above a matching one."""
 
 
-CONF_FLOOR = 0.58   # skip reranking when rubric already found something reasonable
-
 def should_rerank(scored: list[ScoredCandidate], query_specificity: float) -> bool:
-    # Only fire when rubric is truly failing AND results are virtually tied
+    if query_specificity < SPEC_THRESHOLD:
+        return True
     if len(scored) >= 2:
         gap = scored[0].confidence - scored[1].confidence
-        if gap < GAP_THRESHOLD and scored[0].confidence < CONF_FLOOR:
+        if gap < GAP_THRESHOLD:
             return True
     return False
 
