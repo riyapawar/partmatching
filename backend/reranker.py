@@ -47,12 +47,14 @@ Rules:
 - STRICT: if structural constraints are provided (e.g. "required family: hex bolt"), items that do NOT match that family must rank below items that do. Never rank a non-matching family item above a matching one."""
 
 
+CONF_FLOOR = 0.82   # skip reranking when top result is already a strong match
+
 def should_rerank(scored: list[ScoredCandidate], query_specificity: float) -> bool:
     if query_specificity < SPEC_THRESHOLD:
         return True
     if len(scored) >= 2:
         gap = scored[0].confidence - scored[1].confidence
-        if gap < GAP_THRESHOLD:
+        if gap < GAP_THRESHOLD and scored[0].confidence < CONF_FLOOR:
             return True
     return False
 

@@ -60,8 +60,8 @@ async def lifespan(app: FastAPI):
 
     retrieval.init(catalog, embeddings)
 
-    # Load the full active catalog (all 955 rows, pre-dedup) for the Catalog Explorer display
-    _catalog_display = _load_all_active_catalog(DATA_DIR / "catalog.csv")
+    # Build catalog display list from CSV + already-parsed enriched data (no extra parse() calls)
+    _catalog_display = _load_all_active_catalog(DATA_DIR / "catalog.csv", catalog)
     print(f"[startup] Catalog display list: {len(_catalog_display)} active rows.", flush=True)
 
     _customer_profiles = personalization.load_profiles()
@@ -477,25 +477,26 @@ def _parse_length_in(raw: str) -> Optional[float]:
     return None
 
 
-def _load_all_active_catalog(catalog_path: Path) -> list[dict]:
-    """Load all active rows from catalog.csv (including duplicate SKUs) for display."""
-    from backend.attribute_parser import parse as attr_parse
+def _load_all_active_catalog(catalog_path: Path, enriched: list[dict]) -> list[dict]:
+    """Load all 955 active rows from catalog.csv for display.
+    Uses already-parsed data from the enriched cache — no extra parse() calls at startup."""
+    parsed_map = {e["sku"]: e["parsed"] for e in enriched}
     result = []
     with open(catalog_path, encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             if row.get("active", "").strip().upper() != "Y":
                 continue
-            desc = row["catalog_description"]
-            parsed = attr_parse(desc, expand_abbrevs=True)
+            sku  = row["sku"]
+            p    = parsed_map.get(sku, {})
             result.append({
-                "sku":      row["sku"],
-                "desc":     desc,
-                "family":   parsed.family,
-                "material": parsed.material,
-                "finish":   parsed.finish,
-                "system":   parsed.system,
-                "diameter": parsed.diameter_raw,
-                "length":   parsed.length_raw,
+                "sku":      sku,
+                "desc":     row["catalog_description"],
+                "family":   p.get("family"),
+                "material": p.get("material"),
+                "finish":   p.get("finish"),
+                "system":   p.get("system"),
+                "diameter": p.get("diameter_raw"),
+                "length":   p.get("length_raw"),
             })
     return result
 
