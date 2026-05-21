@@ -53,9 +53,12 @@ export default function CustomerSelector({ customers, selected, onSelect, disabl
       {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-          background: 'var(--surface)', border: '1px solid var(--border)',
+          background: 'rgba(11,17,35,0.96)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: 'var(--radius)', marginTop: 4,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
         }}>
           <div style={{ padding: 8 }}>
             <input
@@ -90,12 +93,12 @@ export default function CustomerSelector({ customers, selected, onSelect, disabl
               onClick={() => { onSelect(c.customer_id); setOpen(false); setFilter('') }}
               style={{
                 padding: '10px 14px', cursor: 'pointer', fontSize: 14,
-                background: c.customer_id === selected ? 'rgba(79,142,247,0.12)' : 'transparent',
+                background: c.customer_id === selected ? 'rgba(16,185,129,0.10)' : 'transparent',
                 transition: 'background 0.1s',
               }}
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
               onMouseLeave={e => (e.currentTarget.style.background =
-                c.customer_id === selected ? 'rgba(79,142,247,0.12)' : 'transparent'
+                c.customer_id === selected ? 'rgba(16,185,129,0.10)' : 'transparent'
               )}
             >
               <div style={{ fontWeight: 500 }}>{c.customer_name}</div>
