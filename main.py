@@ -39,11 +39,12 @@ LOW_CONF_THRESHOLD = 0.40   # searches below this are auto-logged for review
 _openai_client: Optional[OpenAI] = None
 _customer_profiles: dict = {}
 _demand_signals: dict = {}          # sku → {orders, customers, last_date, heat}
+_catalog_display: list[dict] = []   # all 955 active rows (pre-dedup) for the Catalog tab
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _openai_client, _customer_profiles, _demand_signals
+    global _openai_client, _customer_profiles, _demand_signals, _catalog_display
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -58,6 +59,10 @@ async def lifespan(app: FastAPI):
         catalog, embeddings = preprocess.run()
 
     retrieval.init(catalog, embeddings)
+
+    # Load the full active catalog (all 955 rows, pre-dedup) for the Catalog Explorer display
+    _catalog_display = _load_all_active_catalog(DATA_DIR / "catalog.csv")
+    print(f"[startup] Catalog display list: {len(_catalog_display)} active rows.", flush=True)
 
     _customer_profiles = personalization.load_profiles()
     print(f"[startup] Loaded {len(_customer_profiles)} customer profiles.", flush=True)
@@ -277,20 +282,8 @@ def search(req: SearchRequest):
 
 @app.get("/api/catalog")
 def get_catalog():
-    """Return all active catalog items with parsed attributes for the Catalog Explorer."""
-    return [
-        {
-            "sku":      item["sku"],
-            "desc":     item["description"],
-            "family":   item["parsed"].get("family"),
-            "material": item["parsed"].get("material"),
-            "finish":   item["parsed"].get("finish"),
-            "system":   item["parsed"].get("system"),
-            "diameter": item["parsed"].get("diameter_raw"),
-            "length":   item["parsed"].get("length_raw"),
-        }
-        for item in retrieval._catalog
-    ]
+    """Return all 955 active catalog rows for the Catalog Explorer."""
+    return _catalog_display
 
 
 @app.get("/api/catalog/demand")
@@ -482,6 +475,29 @@ def _parse_length_in(raw: str) -> Optional[float]:
     m = _re.match(r'^(\d+(?:\.\d+)?)"?$', raw)
     if m: return float(m.group(1))
     return None
+
+
+def _load_all_active_catalog(catalog_path: Path) -> list[dict]:
+    """Load all active rows from catalog.csv (including duplicate SKUs) for display."""
+    from backend.attribute_parser import parse as attr_parse
+    result = []
+    with open(catalog_path, encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            if row.get("active", "").strip().upper() != "Y":
+                continue
+            desc = row["catalog_description"]
+            parsed = attr_parse(desc, expand_abbrevs=True)
+            result.append({
+                "sku":      row["sku"],
+                "desc":     desc,
+                "family":   parsed.family,
+                "material": parsed.material,
+                "finish":   parsed.finish,
+                "system":   parsed.system,
+                "diameter": parsed.diameter_raw,
+                "length":   parsed.length_raw,
+            })
+    return result
 
 
 def _compute_demand_signals(order_file: Path) -> dict:
