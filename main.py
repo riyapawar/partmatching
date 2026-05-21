@@ -244,6 +244,13 @@ def search(req: SearchRequest):
         results = [reranker._format(s) for s in scored[:3]]
         _inject_fills(results, scored)
 
+    # Enforce specificity cap on all results — LLM reranker may have set inflated confidence
+    conf_cap = round(0.58 + 0.37 * query_parsed.specificity, 4)
+    for r in results:
+        if r.get("confidence", 0) > conf_cap:
+            r["confidence"] = conf_cap
+            r["confidence_label"] = scorer.confidence_label(conf_cap)
+
     # Always pad to 3 — reranker may return fewer if LLM omits candidates
     if len(results) < 3:
         used_skus = {r.get("sku") for r in results}
