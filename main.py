@@ -2,10 +2,12 @@
 FastAPI application — Paragon Part Matching
 Run: uvicorn main:app --reload
 """
+import csv
 import json
 import os
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -24,10 +26,12 @@ import backend.personalization as personalization
 import backend.reranker        as reranker
 from backend.attribute_parser  import parse, is_referential, ParsedAttributes
 from backend.personalization   import detect_conflicts
+from backend.abbreviations     import FAMILY_COMPAT, MATERIAL_COMPAT
 
 load_dotenv()
 
 CACHE_DIR      = Path(__file__).parent / "cache"
+DATA_DIR       = Path(__file__).parent / "data"
 REVIEW_QUEUE   = CACHE_DIR / "review_queue.json"
 LOW_CONF_THRESHOLD = 0.40   # searches below this are auto-logged for review
 
@@ -35,6 +39,7 @@ LOW_CONF_THRESHOLD = 0.40   # searches below this are auto-logged for review
 
 _openai_client: Optional[OpenAI] = None
 _customer_profiles: dict = {}
+_demand_signals: dict = {}          # sku → {orders, customers, last_date, heat}
 
 
 @asynccontextmanager
@@ -57,6 +62,9 @@ async def lifespan(app: FastAPI):
 
     _customer_profiles = personalization.load_profiles()
     print(f"[startup] Loaded {len(_customer_profiles)} customer profiles.", flush=True)
+
+    _demand_signals = _compute_demand_signals(DATA_DIR / "order_history.csv")
+    print(f"[startup] Demand signals computed for {len(_demand_signals)} SKUs.", flush=True)
 
     CACHE_DIR.mkdir(exist_ok=True)
     yield
@@ -259,6 +267,82 @@ def get_catalog():
     ]
 
 
+@app.get("/api/catalog/demand")
+def get_demand():
+    """Return demand signals per SKU: order count, customer count, recency heat."""
+    return _demand_signals
+
+
+@app.get("/api/catalog/{sku}/substitutes")
+def get_substitutes(sku: str):
+    """Return ranked compatible alternative SKUs for a given part."""
+    target = next((item for item in retrieval._catalog if item["sku"] == sku), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="SKU not found")
+
+    tp             = target["parsed"]
+    target_family  = tp.get("family")
+    target_material= tp.get("material")
+    target_diam_in = tp.get("diameter_in")
+    target_len_in  = tp.get("length_in")
+
+    results = []
+    for item in retrieval._catalog:
+        if item["sku"] == sku:
+            continue
+        cp    = item["parsed"]
+        score = 0
+        reasons: list[str] = []
+
+        cf = cp.get("family")
+        if cf == target_family:
+            score += 4
+            reasons.append("same family")
+        elif cf and target_family and cf in FAMILY_COMPAT.get(target_family, set()):
+            score += 2
+            reasons.append("compatible family")
+        else:
+            continue   # different family entirely — not a substitute
+
+        cd = cp.get("diameter_in")
+        if target_diam_in and cd:
+            r = target_diam_in / cd
+            if 0.98 <= r <= 1.02:
+                score += 3; reasons.append("exact diameter")
+            elif 0.85 <= r <= 1.15:
+                score += 1; reasons.append("close diameter")
+
+        cl = cp.get("length_in")
+        if target_len_in and cl:
+            r = target_len_in / cl
+            if 0.98 <= r <= 1.02:
+                score += 2; reasons.append("exact length")
+            elif 0.85 <= r <= 1.15:
+                score += 1; reasons.append("close length")
+
+        cm = cp.get("material")
+        if cm == target_material:
+            score += 2; reasons.append("same material")
+        elif cm and target_material and cm in MATERIAL_COMPAT.get(target_material, set()):
+            score += 1; reasons.append("compatible material")
+
+        if score >= 2:
+            results.append({
+                "sku":         item["sku"],
+                "description": item["description"],
+                "score":       score,
+                "reasons":     reasons,
+                "family":      cf,
+                "material":    cm,
+                "diameter":    cp.get("diameter_raw"),
+                "length":      cp.get("length_raw"),
+                "finish":      cp.get("finish"),
+            })
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+    return results[:6]
+
+
 @app.post("/api/review")
 def submit_review(req: ReviewRequest):
     """Manually flag a search result for human review."""
@@ -276,6 +360,38 @@ def get_review_queue():
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _compute_demand_signals(order_file: Path) -> dict:
+    """Read order_history.csv and compute per-SKU demand heat signals."""
+    now         = datetime.now()
+    cutoff_hot  = (now - timedelta(days=90)).strftime("%Y-%m-%d")
+    cutoff_warm = (now - timedelta(days=180)).strftime("%Y-%m-%d")
+
+    by_sku: dict[str, dict] = {}
+    with open(order_file, encoding="utf-8-sig") as f:
+        for row in csv.DictReader(f):
+            sku  = row["sku"]
+            date = row["order_date"].strip()
+            cid  = row["customer_id"]
+            if sku not in by_sku:
+                by_sku[sku] = {"orders": 0, "customers": set(), "last_date": ""}
+            by_sku[sku]["orders"] += 1
+            by_sku[sku]["customers"].add(cid)
+            if date > by_sku[sku]["last_date"]:
+                by_sku[sku]["last_date"] = date
+
+    result: dict = {}
+    for sku, d in by_sku.items():
+        last = d["last_date"]
+        heat = "hot" if last >= cutoff_hot else ("warm" if last >= cutoff_warm else "cold")
+        result[sku] = {
+            "orders":    d["orders"],
+            "customers": len(d["customers"]),
+            "last_date": last,
+            "heat":      heat,
+        }
+    return result
+
 
 def _ms(t0: float) -> float:
     return round((time.perf_counter() - t0) * 1000, 1)
