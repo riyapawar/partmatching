@@ -25,7 +25,6 @@ import backend.scorer          as scorer
 import backend.personalization as personalization
 import backend.reranker        as reranker
 from backend.attribute_parser  import parse, is_referential, ParsedAttributes
-from backend.personalization   import detect_conflicts
 from backend.abbreviations     import FAMILY_COMPAT, MATERIAL_COMPAT
 
 load_dotenv()
@@ -166,9 +165,6 @@ def search(req: SearchRequest):
     # ── Parse query ───────────────────────────────────────────────────────────
     query_parsed: ParsedAttributes = parse(req.query, expand_abbrevs=True)
 
-    # ── Conflict detection (before retrieval — shown regardless of results) ───
-    conflicts = detect_conflicts(query_parsed, profile)
-
     # Bail early if no fastener attributes were recognized at all.
     # Before giving up, try LLM extraction as a fallback for non-standard phrasing.
     if query_parsed.specificity == 0.0:
@@ -179,7 +175,7 @@ def search(req: SearchRequest):
             return SearchResponse(
                 results        = [],
                 query_debug    = _debug(query_parsed),
-                conflicts      = conflicts,
+                conflicts      = [],
                 search_time_ms = _ms(t0),
             )
 
