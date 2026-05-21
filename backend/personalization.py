@@ -18,7 +18,6 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 
 _REFERENCE_DATE = datetime.now()
 _HALF_LIFE_DAYS = 180.0    # exponential recency decay half-life
-_MAX_BOOST      = 0.12     # max personalization additive confidence boost
 
 
 # ── Dataclasses ───────────────────────────────────────────────────────────────
@@ -146,7 +145,7 @@ def personalize(
         cf = candidate_parsed.get("family")
         if cf and cf in profile.family_affinity:
             affinity = profile.family_affinity[cf]
-            b = affinity * 0.08
+            b = affinity * _BOOST_FAMILY
             boost += b
             inferred["family"] = cf
             fills.append(
@@ -159,7 +158,7 @@ def personalize(
         cm = candidate_parsed.get("material")
         if cm and cm in profile.material_affinity:
             affinity = profile.material_affinity[cm]
-            b = affinity * 0.06
+            b = affinity * _BOOST_MATERIAL
             boost += b
             inferred["material"] = cm
             fills.append(
@@ -172,7 +171,7 @@ def personalize(
         cf = candidate_parsed.get("finish")
         if cf and cf in profile.finish_affinity:
             affinity = profile.finish_affinity[cf]
-            b = affinity * 0.04
+            b = affinity * _BOOST_FINISH
             boost += b
             inferred["finish"] = cf
             fills.append(
@@ -236,6 +235,11 @@ def _extract_product_hint(query: str) -> Optional[str]:
 
 
 # ── Conflict detection ────────────────────────────────────────────────────────
+
+_BOOST_FAMILY   = 0.12   # was 0.08
+_BOOST_MATERIAL = 0.10   # was 0.06
+_BOOST_FINISH   = 0.07   # was 0.04
+_MAX_BOOST      = 0.20   # was 0.12
 
 _CONFLICT_THRESHOLD = 0.55   # affinity must exceed this to fire a conflict warning
 
