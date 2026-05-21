@@ -287,18 +287,16 @@ export default function App() {
       }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 6,
-            background: 'linear-gradient(135deg, #10b981, #06b6d4)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, boxShadow: '0 0 16px rgba(16,185,129,0.4)',
-          }}>⚙</div>
-          <span style={{
-            fontSize: 15, fontWeight: 700, letterSpacing: '0.04em',
-            fontFamily: "'Space Grotesk', system-ui, sans-serif",
-            color: '#10b981',
-          }}>PARAGON</span>
-          <span style={{ color: '#2a3a4a', fontSize: 15 }}>/</span>
+          <img
+            src="/logo.png"
+            alt="Paragon"
+            style={{
+              height: 32,
+              filter: dark ? 'none' : 'brightness(0)',
+              opacity: dark ? 0.92 : 0.7,
+            }}
+          />
+          <span style={{ color: dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)', fontSize: 15 }}>/</span>
           <span style={{ fontSize: 13, color: 'var(--muted)', letterSpacing: '0.06em', fontWeight: 500 }}>CATALOG MATCH</span>
         </div>
 
