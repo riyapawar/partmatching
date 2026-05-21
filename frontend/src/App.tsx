@@ -3,6 +3,7 @@ import type { Customer, SearchResponse, QueryDebug, MatchResult } from './types'
 import CustomerSelector from './components/CustomerSelector'
 import CustomerProfile from './components/CustomerProfile'
 import ResultCard from './components/ResultCard'
+import DesignPage from './components/DesignPage'
 
 const EXAMPLE_QUERIES = [
   'SHCS 7/16 x 2-1/2', 'M8 flat washer', '5/16 hex nut', 'lock washer 5/8',
@@ -223,6 +224,7 @@ function EmptyState({ referential, hasCustomer }: { referential: boolean; hasCus
 // ── Main app ─────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [page, setPage]             = useState<'search' | 'design'>('search')
   const [customers, setCustomers]   = useState<Customer[]>([])
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [query, setQuery]           = useState('')
@@ -267,7 +269,12 @@ export default function App() {
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px 80px' }}>
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 28, paddingBottom: 20,
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+      }}>
+        {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 28, height: 28, borderRadius: 6,
@@ -283,10 +290,39 @@ export default function App() {
           <span style={{ color: '#2a3a4a', fontSize: 15 }}>/</span>
           <span style={{ fontSize: 13, color: 'var(--muted)', letterSpacing: '0.06em', fontWeight: 500 }}>CATALOG MATCH</span>
         </div>
+
+        {/* Page tabs */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {(['search', 'design'] as const).map(p => (
+            <button
+              key={p}
+              onClick={() => setPage(p)}
+              style={{
+                fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                padding: '6px 16px', borderRadius: 7,
+                background: page === p ? 'rgba(16,185,129,0.1)' : 'none',
+                border: `1px solid ${page === p ? 'rgba(16,185,129,0.28)' : 'rgba(255,255,255,0.07)'}`,
+                color: page === p ? '#10b981' : 'var(--muted)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+
+        {/* SKU count */}
         <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
           955 active SKUs
         </div>
       </div>
+
+      {/* ── Design page ── */}
+      {page === 'design' && <DesignPage />}
+
+      {/* ── Search page ── */}
+      {page === 'search' && <>
 
       {/* ── Search bar ── */}
       <div style={{
@@ -410,6 +446,8 @@ export default function App() {
           }
         </div>
       )}
+
+      </> /* end search page */}
     </div>
   )
 }

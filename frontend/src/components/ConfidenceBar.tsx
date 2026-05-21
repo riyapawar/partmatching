@@ -14,7 +14,7 @@ const LABEL_META: Record<string, {
   glowClass: string
 }> = {
   strong: {
-    badgeText: 'EXACT MATCH',
+    badgeText: 'STRONG MATCH',
     color:     '#10b981',
     bg:        'rgba(16,185,129,0.12)',
     glow:      'rgba(16,185,129,0.30)',

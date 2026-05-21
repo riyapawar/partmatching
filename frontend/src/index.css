@@ -1,19 +1,19 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #060b18;
-  --surface:   rgba(11, 17, 35, 0.82);
+  --bg:        #080d1a;
+  --surface:   rgba(10, 17, 40, 0.88);
   --glass:     rgba(255, 255, 255, 0.03);
   --border:    rgba(255, 255, 255, 0.08);
   --border-hi: rgba(16, 185, 129, 0.25);
   --text:      #dde3f4;
-  --muted:     #556070;
+  --muted:     #4a5a70;
   --accent:    #10b981;
   --cyan:      #06b6d4;
   --green:     #10b981;
   --yellow:    #f59e0b;
   --red:       #ef4444;
-  --radius:    12px;
+  --radius:    14px;
   --display:   'Space Grotesk', system-ui, sans-serif;
   --body:      'Inter', system-ui, sans-serif;
   --mono:      'JetBrains Mono', 'Fira Code', monospace;
@@ -24,21 +24,21 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  /* Dual radial glow: emerald top-left, cyan bottom-right */
   background-image:
-    radial-gradient(ellipse 80% 55% at 0%   0%,   rgba(16, 185, 129, 0.07) 0%, transparent 60%),
-    radial-gradient(ellipse 70% 45% at 100% 100%, rgba(6,  182, 212, 0.07) 0%, transparent 60%);
-  /* Subtle dot-grid overlay */
-  background-size: 100% 100%, 100% 100%, 28px 28px;
+    radial-gradient(ellipse 80% 55% at 0%   0%,   rgba(16, 185, 129, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 45% at 100% 100%, rgba(6,  182, 212, 0.06) 0%, transparent 60%);
 }
 
-/* Dot grid via ::before on root */
+/* Dot grid + subtle grid lines (k12cybersafe-style texture) */
 #root::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
-  background-size: 28px 28px;
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px),
+    linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 28px 28px, 56px 56px, 56px 56px;
   pointer-events: none;
   z-index: 0;
 }
@@ -61,18 +61,29 @@ button { cursor: pointer; font-family: inherit; }
 
 /* ── Result card hover lift ─────────────────────────────────────────────────── */
 .result-card {
-  background: var(--surface);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: rgba(8, 15, 35, 0.90);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
   transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
   will-change: transform;
 }
 .result-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(16,185,129,0.18);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.55), 0 0 0 1px rgba(16,185,129,0.18);
   border-color: rgba(16,185,129,0.22);
+}
+
+/* ── Design decision cards (k12cybersafe style) ───────────────────────────── */
+.design-card {
+  background: rgba(8, 14, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.design-card:hover {
+  border-color: rgba(255, 255, 255, 0.13);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
 /* ── Animations ──────────────────────────────────────────────────────────────── */
@@ -85,7 +96,7 @@ button { cursor: pointer; font-family: inherit; }
 }
 
 .slide-down { animation: slideDown 0.2s ease forwards; }
-.fade-in    { animation: fadeIn   0.25s ease forwards; }
+.fade-in    { animation: fadeIn   0.3s ease forwards; }
 
 /* ── Skeleton loader ─────────────────────────────────────────────────────────── */
 .skeleton {
