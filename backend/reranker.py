@@ -18,7 +18,7 @@ from openai import OpenAI
 
 from backend.scorer import ScoredCandidate
 
-GAP_THRESHOLD  = 0.10   # confidence gap below which LLM reranking fires
+GAP_THRESHOLD  = 0.07   # confidence gap below which LLM reranking fires
 SPEC_THRESHOLD = 0.17   # specificity below which LLM reranking fires
 RERANK_K       = 4      # how many candidates to send to LLM
 

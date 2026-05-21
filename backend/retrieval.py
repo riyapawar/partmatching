@@ -18,6 +18,7 @@ from backend.attribute_parser import ParsedAttributes
 _catalog: list[dict] = []
 _embeddings: np.ndarray = np.empty((0,))
 _bm25: Optional[BM25Okapi] = None
+_embed_cache: dict[str, np.ndarray] = {}   # query text → normalised vector
 
 
 def init(catalog: list[dict], embeddings: np.ndarray) -> None:
@@ -108,14 +109,20 @@ def search(
 
 
 def embed_query(query: str, client) -> np.ndarray:
-    """Embed a single query string and L2-normalise."""
+    """Embed a single query string and L2-normalise. Results are cached in-process."""
+    key = expand(query).lower().strip()
+    if key in _embed_cache:
+        return _embed_cache[key]
     resp = client.embeddings.create(
         model="text-embedding-3-small",
-        input=[expand(query)],
+        input=[key],
     )
     vec = np.array(resp.data[0].embedding, dtype=np.float32)
     norm = np.linalg.norm(vec)
-    return vec / norm if norm > 0 else vec
+    result = vec / norm if norm > 0 else vec
+    if len(_embed_cache) < 2048:   # cap memory: ~6MB at 1536-dim float32
+        _embed_cache[key] = result
+    return result
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
