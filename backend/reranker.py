@@ -121,6 +121,16 @@ def rerank(
     if not valid:
         return _fallback(scored)
 
+    # Pad to 3 from remaining top_k candidates if LLM returned fewer
+    if len(valid) < 3:
+        used_ids = {v["catalog_id"] for v in valid}
+        for s in top_k:
+            if len(valid) >= 3:
+                break
+            if s.candidate.catalog_id not in used_ids:
+                valid.append(_format(s))
+                used_ids.add(s.candidate.catalog_id)
+
     return valid[:3]
 
 

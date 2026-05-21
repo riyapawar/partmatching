@@ -240,6 +240,17 @@ def search(req: SearchRequest):
         results = [reranker._format(s) for s in scored[:3]]
         _inject_fills(results, scored)
 
+    # Always pad to 3 — reranker may return fewer if LLM omits candidates
+    if len(results) < 3:
+        used_skus = {r.get("sku") for r in results}
+        for s in scored:
+            if len(results) >= 3:
+                break
+            if s.candidate.sku not in used_skus:
+                results.append(reranker._format(s))
+                used_skus.add(s.candidate.sku)
+        _inject_fills(results, scored)
+
     # Deduplicate by SKU (catalog may contain near-duplicate entries)
     seen_skus: set[str] = set()
     deduped: list[dict] = []
