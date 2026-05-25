@@ -1,4 +1,4 @@
-# Paragon Part Match
+# PartMatch
 
 A catalog matching tool for industrial fasteners. Describe what you need in plain language and get the top 3 catalog matches with confidence scores and attribute-level explanations.
 

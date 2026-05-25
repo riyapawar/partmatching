@@ -188,7 +188,7 @@ def main():
     queries = [args.query] if args.query else QUERIES
 
     print(f"\n{'='*70}")
-    print(f"  Paragon Part Match — Eval ({len(queries)} queries)")
+    print(f"  PartMatch — Eval ({len(queries)} queries)")
     if args.customer:
         p = profiles.get(args.customer)
         name = p.customer_name if p else "unknown"

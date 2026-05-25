@@ -1,5 +1,5 @@
 """
-FastAPI application — Paragon Part Matching
+FastAPI application — PartMatch
 Run: uvicorn main:app --reload
 """
 import csv
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Paragon Part Matching", lifespan=lifespan)
+app = FastAPI(title="PartMatch", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

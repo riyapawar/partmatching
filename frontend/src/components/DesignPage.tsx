@@ -139,7 +139,7 @@ export default function DesignPage({ dark }: { dark: boolean }) {
             border: '1px solid rgba(16,185,129,0.2)', padding: '5px 14px', borderRadius: 20,
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 6px #10b981' }} />
-            ENGINEERING NOTES · PARAGON PART MATCHING
+            ENGINEERING NOTES · PARTMATCH
           </div>
           <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 42, fontWeight: 800, lineHeight: 1.12, color: 'var(--text)', marginBottom: 14, letterSpacing: '-0.01em' }}>
             Eleven decisions.<br /><span style={{ color: '#10b981' }}>Each one earned.</span>
@@ -826,7 +826,7 @@ export default function DesignPage({ dark }: { dark: boolean }) {
               a="Serverless would cold-start the BM25 index and load the embedding matrix from disk on every request, adding 2 to 5 seconds of initialization latency. The persistent Railway process keeps both in memory across requests, which is what makes the sub-250ms p95 latency achievable. A serverless architecture would require a separate caching layer (Redis or similar) to match that performance."
             />
             <Q bg={bg} bd={bd}
-              q="How does the catalog get updated when Paragon adds new SKUs?"
+              q="How does the catalog get updated when new SKUs are added?"
               a="Currently: add the new entries to the catalog CSV, run the preprocessing script to recompute BM25 index and embeddings, and restart the server. For a 955-SKU catalog that updates monthly this is acceptable. For a catalog that updates daily, the next step would be an incremental indexing path that appends new embeddings to the existing matrix and updates the BM25 index without a full reprocess."
             />
           </div>

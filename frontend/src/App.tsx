@@ -289,7 +289,7 @@ export default function App() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img
             src="/logo.png"
-            alt="Paragon"
+            alt="PartMatch"
             style={{
               height: 32,
               filter: dark ? 'none' : 'brightness(0)',
