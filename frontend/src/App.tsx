@@ -287,15 +287,7 @@ export default function App() {
       }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img
-            src="/logo.png"
-            alt="PartMatch"
-            style={{
-              height: 32,
-              filter: dark ? 'none' : 'brightness(0)',
-              opacity: dark ? 0.92 : 0.7,
-            }}
-          />
+          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--text)' }}>PartMatch</span>
           <span style={{ color: dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)', fontSize: 15 }}>/</span>
           <span style={{ fontSize: 13, color: 'var(--muted)', letterSpacing: '0.06em', fontWeight: 500 }}>CATALOG MATCH</span>
         </div>
